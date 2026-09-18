@@ -100,11 +100,20 @@ def compare_runs(baseline: RunRecord, candidate: RunRecord) -> Comparison:
             comparison.existing_failures.append(
                 Change("scenario", scenario_id, None, base_status, current_status)
             )
-        if current_status == "error" and base_status != "error":
-            comparison.regressions.append(
-                Change("new-error", scenario_id, None, base_status, current_status,
-                       current.error or (current.judge.error if current.judge else ""))
-            )
+        base_errors = {
+            "execution": base.error,
+            "judge": base.judge.error if base.judge else None,
+        }
+        current_errors = {
+            "execution": current.error,
+            "judge": current.judge.error if current.judge else None,
+        }
+        for channel, error in current_errors.items():
+            if error and not base_errors[channel]:
+                comparison.regressions.append(
+                    Change("new-error", scenario_id, None, base_status, current_status,
+                           error)
+                )
 
         base_checks = _index(base.checks, lambda value: value.id, "baseline check")
         current_checks = _index(current.checks, lambda value: value.id, "candidate check")
@@ -155,14 +164,43 @@ def _evidence(record: ScenarioRecord, turn_index: int | None) -> str:
 
 def render_report(comparison: Comparison) -> str:
     heading = "REGRESSION" if comparison.has_regression else "NO NEW REGRESSION"
+    def metadata(run: RunRecord) -> str:
+        target = run.role_settings.get("target", {})
+        model = target.get("model", "unknown") if isinstance(target, dict) else "unknown"
+        return (
+            f"run {_escape(run.run_id)}; model {_escape(model)}; "
+            f"revision {_escape(run.target_revision)}; fault {_escape(run.fault or 'none')}"
+        )
+
     lines = [
         f"# Understudy comparison: {heading}",
         "",
+        f"- **Baseline:** {metadata(comparison.baseline)}",
+        f"- **Candidate:** {metadata(comparison.candidate)}",
+        "",
         "Uncalibrated pass threshold: every judge dimension must score at least 3.",
+        "",
+        "## Scenario results",
+        "",
+        "| Scenario | Baseline | Candidate |",
+        "|---|---:|---:|",
+    ]
+    baseline_records = {
+        record.scenario.id: record for record in comparison.baseline.records
+    }
+    candidate_records = {
+        record.scenario.id: record for record in comparison.candidate.records
+    }
+    for scenario_id in sorted(baseline_records):
+        lines.append(
+            f"| {_escape(scenario_id)} | {scenario_status(baseline_records[scenario_id])} | "
+            f"{scenario_status(candidate_records[scenario_id])} |"
+        )
+    lines.extend([
         "",
         "## Regressions",
         "",
-    ]
+    ])
     if not comparison.regressions:
         lines.append("None.")
     for change in comparison.regressions:

@@ -68,6 +68,18 @@ def test_new_error_is_regression_even_when_scenario_already_failed():
     assert any(change.kind == "new-error" for change in comparison.regressions)
 
 
+def test_new_judge_error_is_regression_despite_existing_execution_error():
+    baseline = run(record_error="timeout")
+    candidate = run(record_error="timeout", judge_error="judge unavailable")
+
+    comparison = compare_runs(baseline, candidate)
+
+    assert any(
+        change.kind == "new-error" and change.explanation == "judge unavailable"
+        for change in comparison.regressions
+    )
+
+
 def test_unchanged_failure_remains_visible_without_becoming_a_regression():
     comparison = compare_runs(run(check_status="fail"), run(check_status="fail"))
     report = render_report(comparison)
@@ -116,3 +128,19 @@ def test_report_escapes_untrusted_markdown_text():
     candidate = run(check_status="fail", explanation="[bad](https://example.test) | raw")
     report = render_report(compare_runs(run(), candidate))
     assert "\\[bad\\]\\(https://example.test\\) \\| raw" in report
+
+
+def test_report_identifies_runs_and_lists_every_scenario_status():
+    baseline = run(run_id="baseline-1", model="old-model")
+    baseline.fault = None
+    candidate = run(run_id="candidate-2", model="new-model")
+    candidate.fault = "premature_booking"
+
+    report = render_report(compare_runs(baseline, candidate))
+
+    assert "baseline-1" in report
+    assert "candidate-2" in report
+    assert "old-model" in report
+    assert "new-model" in report
+    assert "premature\\_booking" in report
+    assert "| booking | pass | pass |" in report
