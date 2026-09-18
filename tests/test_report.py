@@ -1,4 +1,5 @@
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -12,6 +13,7 @@ from understudy.records import (
     ScenarioRecord,
     Turn,
     evaluation_signature,
+    load_run,
 )
 from understudy.report import compare_runs, render_report
 
@@ -170,3 +172,24 @@ def test_report_identifies_runs_and_lists_every_scenario_status():
     assert "new-model" in report
     assert "premature\\_booking" in report
     assert "| booking | pass | pass |" in report
+
+
+def test_committed_live_evidence_detects_the_named_regression():
+    examples = Path(__file__).parents[1] / "examples"
+    baseline = load_run(examples / "baseline.json")
+    candidate = load_run(examples / "seeded-bug.json")
+
+    comparison = compare_runs(baseline, candidate)
+
+    assert comparison.has_regression
+    assert any(
+        change.scenario_id == "declined-confirmation"
+        and change.check_id == "confirmation-before-booking"
+        and change.baseline == "pass"
+        and change.candidate == "fail"
+        for change in comparison.regressions
+    )
+    assert (
+        render_report(comparison).rstrip()
+        == (examples / "comparison.md").read_text().rstrip()
+    )
