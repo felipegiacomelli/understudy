@@ -6,7 +6,16 @@ import pytest
 
 from understudy.checks import evaluate_checks
 from understudy.clinic import ClinicTarget, SCENARIOS
-from understudy.records import Observation, Scenario, Turn
+from understudy.records import (
+    Action,
+    Observation,
+    RunRecord,
+    Scenario,
+    Turn,
+    evaluation_signature,
+    load_run,
+    save_run,
+)
 from understudy.runner import run_scenario, run_suite
 
 BOOKING = {
@@ -51,7 +60,7 @@ def scenario(**changes):
 def booking_decisions():
     return Decisions(
         {
-            "reply": "Please confirm the details",
+            "reply": "Please confirm Ava Stone / consultation / 2030-04-15T09:00",
             "action": {"name": "request_confirmation", "arguments": BOOKING},
         },
         {"reply": "Booked", "action": {"name": "book", "arguments": BOOKING}},
@@ -320,12 +329,56 @@ def test_state_types_and_transitions_are_checked_independently():
         result.id == "state-types" and result.status == "fail"
         for result in evaluate_checks(record)
     )
+    assert (
+        next(
+            result for result in evaluate_checks(record) if result.id == "state-types"
+        ).turn_index
+        == 2
+    )
 
     record.turns[-1].observation.state["appointments"] = []
     assert any(
         result.id == "allowed-transitions" and result.status == "fail"
         for result in evaluate_checks(record)
     )
+
+
+def test_illegal_final_transition_check_round_trips_with_turn_index(tmp_path):
+    record = run_scenario(
+        scenario(), ClinicTarget(booking_decisions()), Customer("CONFIRM")
+    )
+    record.turns.append(
+        Turn(
+            "unexpected",
+            Observation("Back", {"status": "active", "appointments": []}, "exposed"),
+        )
+    )
+    record.checks = evaluate_checks(record)
+    transition = next(
+        item for item in record.checks if item.id == "allowed-transitions"
+    )
+    assert transition.turn_index == 2
+
+    signature = evaluation_signature([record.scenario], {}, {})
+    run = RunRecord(
+        1,
+        "run",
+        "2030-01-01T00:00:00Z",
+        "2030-01-01T00:01:00Z",
+        {},
+        "2030-04-15",
+        [record.scenario],
+        {},
+        {},
+        "test",
+        None,
+        signature,
+        [],
+        [record],
+    )
+    path = tmp_path / "run.json"
+    save_run(run, path)
+    assert load_run(path).records[0].checks == record.checks
 
 
 def test_successful_action_requires_observed_store_effect_and_reply_content():
@@ -341,5 +394,47 @@ def test_successful_action_requires_observed_store_effect_and_reply_content():
     record.turns[0].observation.reply = "   "
     assert any(
         result.id == "expected-replies" and result.status == "fail"
+        for result in evaluate_checks(record)
+    )
+
+
+def test_failed_action_cannot_hide_forbidden_store_addition():
+    declined = scenario(expected_outcome="active", expected_terminal_states=[])
+    record = run_scenario(
+        declined,
+        ClinicTarget(Decisions({"reply": "No booking"})),
+        Customer("<END>"),
+    )
+    appointment = {**BOOKING, "appointment_id": "APT-1"}
+    record.turns[0].observation.actions = [
+        Action("book", BOOKING, {"error": "failed"}, "failed")
+    ]
+    record.turns[0].observation.state["appointments"] = [appointment]
+    assert any(
+        result.id == "forbidden-actions" and result.status == "fail"
+        for result in evaluate_checks(record)
+    )
+
+
+def test_booking_requires_new_store_effect_and_real_confirmation_staging():
+    record = run_scenario(
+        scenario(), ClinicTarget(booking_decisions()), Customer("CONFIRM")
+    )
+    appointment = record.turns[-1].observation.state["appointments"][0]
+    record.initial_observation.state["appointments"] = [appointment]
+    record.turns[0].observation.state["appointments"] = [appointment]
+    record.turns[-1].observation.actions[0].result["before"]["appointments"] = [
+        appointment
+    ]
+    assert any(
+        result.id == "successful-actions" and result.status == "fail"
+        for result in evaluate_checks(record)
+    )
+
+    record.turns[0].observation.actions[0].name = "book"
+    record.turns[0].observation.actions[0].status = "failed"
+    record.turns[0].observation.actions[0].result["error"] = "unavailable slot"
+    assert any(
+        result.id == "confirmation-before-booking" and result.status == "fail"
         for result in evaluate_checks(record)
     )

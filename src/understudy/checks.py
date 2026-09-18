@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from .records import CheckResult, ScenarioRecord
 
-CHECK_REVISION = "clinic-v1"
+CHECK_REVISION = "clinic-v2"
 BOOKING_FIELDS = ("name", "appointment_type", "slot")
 
 
@@ -47,7 +47,7 @@ def evaluate_checks(record: ScenarioRecord) -> list[CheckResult]:
                     if bad_state is None
                     else "Clinic state has invalid field types."
                 ),
-                bad_state,
+                _turn_index(bad_state),
             )
         )
     else:
@@ -123,7 +123,7 @@ def evaluate_checks(record: ScenarioRecord) -> list[CheckResult]:
                     if illegal is None
                     else "Observed an illegal state transition."
                 ),
-                illegal,
+                _turn_index(illegal),
             )
         )
     else:
@@ -153,8 +153,9 @@ def evaluate_checks(record: ScenarioRecord) -> list[CheckResult]:
             ),
         )
     )
-    forbidden = not expected_booked and any(
-        action.status == "succeeded" for _, action in books
+    forbidden = not expected_booked and (
+        any(action.status == "succeeded" for _, action in books)
+        or any(_new_appointments(record, index) for index in range(len(record.turns)))
     )
     results.append(
         _result(
@@ -247,12 +248,23 @@ def _has_prior_confirmation(record: ScenarioRecord, turn_index: int, action) -> 
     if turn_index < 1 or record.turns[turn_index].customer_message != "CONFIRM":
         return False
     details = {key: action.arguments.get(key) for key in BOOKING_FIELDS}
+    prior_turn = record.turns[turn_index - 1]
+    displayed = all(
+        str(value) in prior_turn.observation.reply for value in details.values()
+    )
     return any(
-        prior.name in {"request_confirmation", "book"}
-        and prior.status
-        == ("succeeded" if prior.name == "request_confirmation" else "failed")
+        displayed
+        and (
+            (prior.name == "request_confirmation" and prior.status == "succeeded")
+            or (
+                prior.name == "book"
+                and prior.status == "failed"
+                and isinstance(prior.result, dict)
+                and prior.result.get("error") == "explicit confirmation required"
+            )
+        )
         and {key: prior.arguments.get(key) for key in BOOKING_FIELDS} == details
-        for prior in record.turns[turn_index - 1].observation.actions
+        for prior in prior_turn.observation.actions
     )
 
 
@@ -266,11 +278,49 @@ def _observed_booking(record: ScenarioRecord, turn_index: int, action) -> bool:
     ):
         return False
     details = {key: action.arguments.get(key) for key in BOOKING_FIELDS}
+    before = (
+        record.initial_observation.state
+        if turn_index == 0
+        else record.turns[turn_index - 1].observation.state
+    )
+    if not isinstance(before, dict) or not isinstance(before.get("appointments"), list):
+        return False
+    previous = before["appointments"]
+    if any(
+        isinstance(item, dict) and item.get("slot") == details["slot"]
+        for item in previous
+    ):
+        return False
+    previous_ids = {
+        item.get("appointment_id") for item in previous if isinstance(item, dict)
+    }
     return any(
         isinstance(item, dict)
+        and item.get("appointment_id") not in previous_ids
         and all(item.get(key) == value for key, value in details.items())
         for item in after["appointments"]
     )
+
+
+def _new_appointments(record: ScenarioRecord, turn_index: int) -> list[dict]:
+    before = (
+        record.initial_observation.state
+        if turn_index == 0
+        else record.turns[turn_index - 1].observation.state
+    )
+    after = record.turns[turn_index].observation.state
+    if not isinstance(before, dict) or not isinstance(after, dict):
+        return []
+    old = before.get("appointments")
+    new = after.get("appointments")
+    if not isinstance(old, list) or not isinstance(new, list):
+        return []
+    old_ids = {item.get("appointment_id") for item in old if isinstance(item, dict)}
+    return [
+        item
+        for item in new
+        if isinstance(item, dict) and item.get("appointment_id") not in old_ids
+    ]
 
 
 def _expected_probe_silence(record: ScenarioRecord, index: int) -> bool:
@@ -287,3 +337,9 @@ def _result(
     check_id: str, status: str, explanation: str, turn_index: int | None = None
 ) -> CheckResult:
     return CheckResult(check_id, status, explanation, turn_index)
+
+
+def _turn_index(observation_index: int | None) -> int | None:
+    if observation_index is None or observation_index == 0:
+        return None
+    return observation_index - 1
