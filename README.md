@@ -62,13 +62,22 @@ Follow the implementation: [target and store](src/understudy/clinic.py) → [ind
 
 ## Run a live experiment
 
-Live runs incur provider charges. Supply `OPENAI_API_KEY` and `DEEPSEEK_API_KEY` in your shell environment; the application does not read `.env` files. Use fresh output paths:
+Live runs incur provider charges. Put the provider keys in the Git-ignored `.env` file:
+
+```dotenv
+OPENAI_API_KEY=your-openai-key
+DEEPSEEK_API_KEY=your-deepseek-key
+```
+
+Pass that file explicitly through uv and use fresh output paths:
 
 ```bash
-uv run understudy run --output runs/baseline.json
-uv run understudy run --fault premature_booking --output runs/seeded-bug.json
+uv run --env-file .env understudy run --output runs/baseline.json
+uv run --env-file .env understudy run --fault premature_booking --output runs/seeded-bug.json
 uv run understudy compare runs/baseline.json runs/seeded-bug.json
 ```
+
+The application does not parse `.env` itself, and comparison never needs credentials.
 
 Exit codes are **0** for a passing run/no new regression, **1** for an evaluation failure/regression, and **2** for invalid/incompatible evidence or execution/judge errors. A detected seeded regression should exit 1. Comparison needs no keys and compares stored results; it does not rerun the agent or checks. An unchanged failing baseline can produce “no new regression” while its failures remain visible.
 
