@@ -5,7 +5,14 @@ from datetime import UTC, datetime
 from typing import Callable, Protocol
 from uuid import uuid4
 
-from .records import Observation, RunRecord, Scenario, ScenarioRecord, Turn, evaluation_signature
+from .records import (
+    Observation,
+    RunRecord,
+    Scenario,
+    ScenarioRecord,
+    Turn,
+    evaluation_signature,
+)
 
 END_SENTINEL = "<END>"
 
@@ -19,7 +26,9 @@ class Customer(Protocol):
     def reply(self, history: list[Turn]) -> str: ...
 
 
-def run_scenario(scenario: Scenario, target: TargetAgent, customer: Customer) -> ScenarioRecord:
+def run_scenario(
+    scenario: Scenario, target: TargetAgent, customer: Customer
+) -> ScenarioRecord:
     turns: list[Turn] = []
     error = None
     closure = "exchange-limit"
@@ -38,11 +47,17 @@ def run_scenario(scenario: Scenario, target: TargetAgent, customer: Customer) ->
                 break
             if exchange + 1 == scenario.max_exchanges:
                 break
-            message = customer.reply(deepcopy(turns))
+            visible = [
+                Turn(turn.customer_message, Observation(turn.observation.reply))
+                for turn in turns
+            ]
+            message = customer.reply(visible)
             if message == END_SENTINEL:
                 closure = "customer-ended"
                 break
-    except Exception as exc:  # retain completed evidence without leaking provider bodies
+    except (
+        Exception
+    ) as exc:  # retain completed evidence without leaking provider bodies
         closure, error = "error", type(exc).__name__
         if "initial" not in locals():
             initial = Observation("", None, "unavailable")
@@ -67,11 +82,34 @@ def run_suite(
     records = []
     for scenario in scenarios:
         try:
-            records.append(run_scenario(scenario, target_factory(scenario), customer_factory(scenario)))
+            records.append(
+                run_scenario(
+                    scenario, target_factory(scenario), customer_factory(scenario)
+                )
+            )
         except Exception as exc:
-            records.append(ScenarioRecord(scenario, Observation("", None, "unavailable"), [], "error", type(exc).__name__))
+            records.append(
+                ScenarioRecord(
+                    scenario,
+                    Observation("", None, "unavailable"),
+                    [],
+                    "error",
+                    type(exc).__name__,
+                )
+            )
     return RunRecord(
-        1, str(uuid4()), started, datetime.now(UTC).isoformat(), role_settings or {},
-        fictional_date, deepcopy(scenarios), personas or {}, rubric or {}, target_revision,
-        fault, evaluation_signature(scenarios, personas or {}, rubric or {}), [], records,
+        1,
+        str(uuid4()),
+        started,
+        datetime.now(UTC).isoformat(),
+        role_settings or {},
+        fictional_date,
+        deepcopy(scenarios),
+        personas or {},
+        rubric or {},
+        target_revision,
+        fault,
+        evaluation_signature(scenarios, personas or {}, rubric or {}),
+        [],
+        records,
     )

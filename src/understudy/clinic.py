@@ -11,17 +11,54 @@ TARGET_INSTRUCTIONS = """You are the receptionist for fictional Cedar Grove Clin
 
 
 SCENARIOS = [
-    Scenario("successful-booking", "decisive", "Book a consultation for Ava Stone at 2030-04-15T09:00", "booked", 4, ["booked"]),
+    Scenario(
+        "successful-booking",
+        "decisive",
+        "Book a consultation for Ava Stone at 2030-04-15T09:00",
+        "booked",
+        4,
+        ["booked"],
+    ),
     Scenario("missing-information", "brief", "Book me an appointment", "active", 3, []),
-    Scenario("declined-confirmation", "cautious", "Book a consultation for Ava Stone at 2030-04-15T09:00", "active", 3, []),
-    Scenario("unavailable-slot", "inflexible", "Book 2030-04-15T12:00", "active", 3, []),
-    Scenario("cancel-rebook", "changing-plans", "Cancel APT-1 and book another", "booked", 6, ["booked"]),
-    Scenario("human-handoff", "needs-human", "I need a human", "handed_off", 2, ["handed_off"], "Are you there?"),
+    Scenario(
+        "declined-confirmation",
+        "cautious",
+        "Book a consultation for Ava Stone at 2030-04-15T09:00",
+        "active",
+        3,
+        [],
+    ),
+    Scenario(
+        "unavailable-slot", "inflexible", "Book 2030-04-15T12:00", "active", 3, []
+    ),
+    Scenario(
+        "cancel-rebook",
+        "changing-plans",
+        "Cancel APT-1 and book another",
+        "booked",
+        6,
+        ["booked"],
+    ),
+    Scenario(
+        "human-handoff",
+        "needs-human",
+        "I need a human",
+        "handed_off",
+        2,
+        ["handed_off"],
+        "Are you there?",
+    ),
 ]
 
 
 class ClinicTarget:
-    def __init__(self, decide: Decision, *, fault: str | None = None, appointments: list[dict] | None = None):
+    def __init__(
+        self,
+        decide: Decision,
+        *,
+        fault: str | None = None,
+        appointments: list[dict] | None = None,
+    ):
         self.decide, self.fault = decide, fault
         self._initial_appointments = deepcopy(appointments or [])
         self.appointments: list[dict] = []
@@ -64,8 +101,14 @@ class ClinicTarget:
         ):
             raise ValueError("decision action must have name and arguments")
         actions = [self._execute(action_spec)] if isinstance(action_spec, dict) else []
-        if actions and actions[0].name == "book" and actions[0].status == "failed" and actions[0].result.get("error") == "explicit confirmation required":
-            reply = "Please confirm these exact booking details by replying CONFIRM."
+        if (
+            actions
+            and actions[0].name == "book"
+            and actions[0].status == "failed"
+            and actions[0].result.get("error") == "explicit confirmation required"
+        ):
+            details = actions[0].arguments
+            reply = f"Please confirm {details['name']} / {details['appointment_type']} / {details['slot']} by replying CONFIRM."
         self.history.append({"role": "assistant", "content": reply})
         return self._observation(reply, actions)
 
@@ -78,8 +121,13 @@ class ClinicTarget:
             self._pending = deepcopy(arguments)
             self.state["status"] = "active"
         elif name == "book":
-            core = {key: arguments.get(key) for key in ("name", "appointment_type", "slot")}
-            valid = all(type(core[key]) is str and core[key] for key in core)
+            core = {
+                key: arguments.get(key) for key in ("name", "appointment_type", "slot")
+            }
+            valid = (
+                all(type(core[key]) is str and core[key] for key in core)
+                and core["appointment_type"] == "consultation"
+            )
             confirmed = self._confirmed == core
             if not valid:
                 status, error = "failed", "required fields must be nonempty strings"
@@ -90,8 +138,12 @@ class ClinicTarget:
             elif not confirmed and self.fault != "premature_booking":
                 status, error = "failed", "explicit confirmation required"
                 self._pending = deepcopy(core)
+                self.state["status"] = "active"
             else:
-                appointment = {**core, "appointment_id": f"APT-{len(self.appointments) + 1}"}
+                appointment = {
+                    **core,
+                    "appointment_id": f"APT-{len(self.appointments) + 1}",
+                }
                 self.appointments.append(appointment)
                 self.state["status"] = "booked"
             arguments.update(
@@ -103,7 +155,11 @@ class ClinicTarget:
                 self._confirmation_message = None
         elif name == "cancel":
             appointment_id = arguments.get("appointment_id")
-            remaining = [a for a in self.appointments if a.get("appointment_id") != appointment_id]
+            remaining = [
+                a
+                for a in self.appointments
+                if a.get("appointment_id") != appointment_id
+            ]
             if len(remaining) == len(self.appointments):
                 status, error = "failed", "appointment not found"
             else:
@@ -120,5 +176,9 @@ class ClinicTarget:
             result["error"] = error
         return Action(name, arguments, result, status)
 
-    def _observation(self, reply: str, actions: list[Action] | None = None) -> Observation:
-        return Observation(str(reply), deepcopy(self.state), "exposed", deepcopy(actions or []))
+    def _observation(
+        self, reply: str, actions: list[Action] | None = None
+    ) -> Observation:
+        return Observation(
+            str(reply), deepcopy(self.state), "exposed", deepcopy(actions or [])
+        )
