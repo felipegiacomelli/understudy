@@ -6,7 +6,6 @@ from typing import Literal
 
 from .records import JudgeResult, ScenarioRecord
 
-
 RUBRIC = {
     "clarity": {
         0: "Incomprehensible or contradictory.",
@@ -71,7 +70,9 @@ def _parse_result(raw: str) -> JudgeResult:
         raise ValueError("invalid explanations")
     if any(type(score) is not int or not 0 <= score <= 4 for score in scores.values()):
         raise ValueError("invalid score")
-    if any(not isinstance(text, str) or not text.strip() for text in explanations.values()):
+    if any(
+        not isinstance(text, str) or not text.strip() for text in explanations.values()
+    ):
         raise ValueError("invalid explanation")
     return JudgeResult(scores, explanations)
 
@@ -128,8 +129,10 @@ def scenario_status(
 ) -> Literal["pass", "fail", "error", "unsupported"]:
     if record.error or (record.judge is not None and record.judge.error):
         return "error"
-    if any(check.status not in {"pass", "fail", "error", "unsupported"}
-           for check in record.checks):
+    if any(
+        check.status not in {"pass", "fail", "error", "unsupported"}
+        for check in record.checks
+    ):
         return "error"
     if any(check.status == "error" for check in record.checks):
         return "error"
@@ -144,10 +147,14 @@ def scenario_status(
         return "unsupported"
     if (
         set(record.judge.explanations) != set(RUBRIC)
-        or any(not isinstance(text, str) or not text.strip()
-               for text in record.judge.explanations.values())
-        or any(type(score) is not int or not 0 <= score <= 4
-               for score in record.judge.scores.values())
+        or any(
+            not isinstance(text, str) or not text.strip()
+            for text in record.judge.explanations.values()
+        )
+        or any(
+            type(score) is not int or not 0 <= score <= 4
+            for score in record.judge.scores.values()
+        )
     ):
         return "error"
     if any(score < PASS_THRESHOLD for score in record.judge.scores.values()):

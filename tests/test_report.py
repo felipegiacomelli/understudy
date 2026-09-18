@@ -16,8 +16,17 @@ from understudy.records import (
 from understudy.report import compare_runs, render_report
 
 
-def run(*, run_id="run", signature="sig", check_status="pass", score=3,
-        record_error=None, judge_error=None, explanation="booking happened", model="one"):
+def run(
+    *,
+    run_id="run",
+    signature="sig",
+    check_status="pass",
+    score=3,
+    record_error=None,
+    judge_error=None,
+    explanation="booking happened",
+    model="one",
+):
     scenario = Scenario("booking", "persona", "hello", "booked", 2, ["booked"])
     record = ScenarioRecord(
         scenario,
@@ -25,27 +34,46 @@ def run(*, run_id="run", signature="sig", check_status="pass", score=3,
         [Turn("Book it", Observation("Booked *now*", {"status": "booked"}, "exposed"))],
         "terminal",
         error=record_error,
-        checks=[CheckResult("confirmation-before-booking", check_status, explanation, 0)],
+        checks=[
+            CheckResult("confirmation-before-booking", check_status, explanation, 0)
+        ],
         judge=JudgeResult(
             {dimension: score for dimension in RUBRIC},
             {dimension: "clear evidence" for dimension in RUBRIC},
             judge_error,
         ),
     )
-    signature = signature if signature != "sig" else evaluation_signature(
-        [scenario], {"persona": {}}, RUBRIC
+    signature = (
+        signature
+        if signature != "sig"
+        else evaluation_signature([scenario], {"persona": {}}, RUBRIC)
     )
     return RunRecord(
-        1, run_id, "start", "finish", {"target": {"model": model}}, "2030-04-15",
-        [scenario], {"persona": {}}, RUBRIC, "target-revision", None, signature, [],
+        1,
+        run_id,
+        "start",
+        "finish",
+        {"target": {"model": model}},
+        "2030-04-15",
+        [scenario],
+        {"persona": {}},
+        RUBRIC,
+        "target-revision",
+        None,
+        signature,
+        [],
         [record],
     )
 
 
 def test_compare_detects_check_and_scenario_regressions_without_averaging():
     baseline = run(run_id="baseline", score=3)
-    candidate = run(run_id="candidate", check_status="fail", score=4,
-                    explanation="Booked before explicit confirmation")
+    candidate = run(
+        run_id="candidate",
+        check_status="fail",
+        score=4,
+        explanation="Booked before explicit confirmation",
+    )
 
     comparison = compare_runs(baseline, candidate)
     report = render_report(comparison)
@@ -104,12 +132,8 @@ def test_model_changes_are_allowed():
             value,
             records=[replace(value.records[0], checks=value.records[0].checks * 2)],
         ),
-        lambda value: replace(
-            value, records=[replace(value.records[0], checks=[])]
-        ),
-        lambda value: replace(
-            value, records=[replace(value.records[0], judge=None)]
-        ),
+        lambda value: replace(value, records=[replace(value.records[0], checks=[])]),
+        lambda value: replace(value, records=[replace(value.records[0], judge=None)]),
     ],
 )
 def test_compare_rejects_incompatible_or_incomplete_artifacts(mutate):
@@ -125,7 +149,9 @@ def test_compare_rejects_signature_that_does_not_match_stored_evaluation_inputs(
 
 
 def test_report_escapes_untrusted_markdown_text():
-    candidate = run(check_status="fail", explanation="[bad](https://example.test) | raw")
+    candidate = run(
+        check_status="fail", explanation="[bad](https://example.test) | raw"
+    )
     report = render_report(compare_runs(run(), candidate))
     assert "\\[bad\\]\\(https://example.test\\) \\| raw" in report
 

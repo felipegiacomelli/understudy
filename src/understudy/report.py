@@ -59,8 +59,10 @@ def _validate_run(run: RunRecord) -> dict[str, ScenarioRecord]:
         _index(record.checks, lambda value: value.id, f"check in {scenario_id}")
         if not record.checks:
             raise ValueError(f"Missing checks for scenario: {scenario_id}")
-        if any(check.status not in {"pass", "fail", "error", "unsupported"}
-               for check in record.checks):
+        if any(
+            check.status not in {"pass", "fail", "error", "unsupported"}
+            for check in record.checks
+        ):
             raise ValueError(f"Invalid check status in scenario: {scenario_id}")
         if not record.error and record.judge is None:
             raise ValueError(f"Missing judge result for scenario: {scenario_id}")
@@ -69,12 +71,18 @@ def _validate_run(run: RunRecord) -> dict[str, ScenarioRecord]:
                 record.judge.explanations
             ) != set(RUBRIC):
                 raise ValueError(f"Incomplete judge result for scenario: {scenario_id}")
-            if any(type(score) is not int or not 0 <= score <= 4
-                   for score in record.judge.scores.values()):
+            if any(
+                type(score) is not int or not 0 <= score <= 4
+                for score in record.judge.scores.values()
+            ):
                 raise ValueError(f"Invalid judge score in scenario: {scenario_id}")
-            if any(not isinstance(text, str) or not text.strip()
-                   for text in record.judge.explanations.values()):
-                raise ValueError(f"Invalid judge explanation in scenario: {scenario_id}")
+            if any(
+                not isinstance(text, str) or not text.strip()
+                for text in record.judge.explanations.values()
+            ):
+                raise ValueError(
+                    f"Invalid judge explanation in scenario: {scenario_id}"
+                )
     return records
 
 
@@ -111,27 +119,47 @@ def compare_runs(baseline: RunRecord, candidate: RunRecord) -> Comparison:
         for channel, error in current_errors.items():
             if error and not base_errors[channel]:
                 comparison.regressions.append(
-                    Change("new-error", scenario_id, None, base_status, current_status,
-                           error)
+                    Change(
+                        "new-error",
+                        scenario_id,
+                        None,
+                        base_status,
+                        current_status,
+                        error,
+                    )
                 )
 
         base_checks = _index(base.checks, lambda value: value.id, "baseline check")
-        current_checks = _index(current.checks, lambda value: value.id, "candidate check")
+        current_checks = _index(
+            current.checks, lambda value: value.id, "candidate check"
+        )
         if set(base_checks) != set(current_checks):
             raise ValueError(f"Check IDs do not match for scenario: {scenario_id}")
         for check_id in sorted(base_checks):
             old = base_checks[check_id]
             new = current_checks[check_id]
             change = Change(
-                "check", scenario_id, check_id, old.status, new.status,
-                new.explanation, new.turn_index,
+                "check",
+                scenario_id,
+                check_id,
+                old.status,
+                new.status,
+                new.explanation,
+                new.turn_index,
             )
             if old.status == "pass" and new.status != "pass":
                 comparison.regressions.append(change)
             elif new.status == "error" and old.status != "error":
                 comparison.regressions.append(
-                    Change("new-error", scenario_id, check_id, old.status, new.status,
-                           new.explanation, new.turn_index)
+                    Change(
+                        "new-error",
+                        scenario_id,
+                        check_id,
+                        old.status,
+                        new.status,
+                        new.explanation,
+                        new.turn_index,
+                    )
                 )
             elif new.status != "pass":
                 comparison.existing_failures.append(change)
@@ -141,7 +169,9 @@ def compare_runs(baseline: RunRecord, candidate: RunRecord) -> Comparison:
                 old_score = base.judge.scores.get(dimension)
                 new_score = current.judge.scores.get(dimension)
                 if type(old_score) is int and type(new_score) is int:
-                    comparison.score_deltas[(scenario_id, dimension)] = new_score - old_score
+                    comparison.score_deltas[(scenario_id, dimension)] = (
+                        new_score - old_score
+                    )
     return comparison
 
 
@@ -156,17 +186,25 @@ def _evidence(record: ScenarioRecord, turn_index: int | None) -> str:
     if turn_index is None or not 0 <= turn_index < len(record.turns):
         return ""
     turn = record.turns[turn_index]
-    parts = [f'customer: "{turn.customer_message}"', f'assistant: "{turn.observation.reply}"']
+    parts = [
+        f'customer: "{turn.customer_message}"',
+        f'assistant: "{turn.observation.reply}"',
+    ]
     if turn.observation.actions:
-        parts.append("actions: " + ", ".join(action.name for action in turn.observation.actions))
+        parts.append(
+            "actions: " + ", ".join(action.name for action in turn.observation.actions)
+        )
     return "; ".join(parts)
 
 
 def render_report(comparison: Comparison) -> str:
     heading = "REGRESSION" if comparison.has_regression else "NO NEW REGRESSION"
+
     def metadata(run: RunRecord) -> str:
         target = run.role_settings.get("target", {})
-        model = target.get("model", "unknown") if isinstance(target, dict) else "unknown"
+        model = (
+            target.get("model", "unknown") if isinstance(target, dict) else "unknown"
+        )
         return (
             f"run {_escape(run.run_id)}; model {_escape(model)}; "
             f"revision {_escape(run.target_revision)}; fault {_escape(run.fault or 'none')}"
@@ -196,11 +234,13 @@ def render_report(comparison: Comparison) -> str:
             f"| {_escape(scenario_id)} | {scenario_status(baseline_records[scenario_id])} | "
             f"{scenario_status(candidate_records[scenario_id])} |"
         )
-    lines.extend([
-        "",
-        "## Regressions",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Regressions",
+            "",
+        ]
+    )
     if not comparison.regressions:
         lines.append("None.")
     for change in comparison.regressions:
@@ -213,10 +253,16 @@ def render_report(comparison: Comparison) -> str:
             f"- **{_escape(change.scenario_id)} / {_escape(subject)}**: "
             f"{_escape(change.baseline)} → {_escape(change.candidate)}{reference}{detail}"
         )
-        evidence = _evidence(comparison.candidate.records[
-            next(i for i, record in enumerate(comparison.candidate.records)
-                 if record.scenario.id == change.scenario_id)
-        ], change.turn_index)
+        evidence = _evidence(
+            comparison.candidate.records[
+                next(
+                    i
+                    for i, record in enumerate(comparison.candidate.records)
+                    if record.scenario.id == change.scenario_id
+                )
+            ],
+            change.turn_index,
+        )
         if evidence:
             lines.append(f"  - Evidence: {_escape(evidence)}")
 
@@ -225,7 +271,9 @@ def render_report(comparison: Comparison) -> str:
         lines.append("None.")
     for change in comparison.existing_failures:
         subject = change.check_id or "scenario"
-        lines.append(f"- {_escape(change.scenario_id)} / {_escape(subject)}: {_escape(change.candidate)}")
+        lines.append(
+            f"- {_escape(change.scenario_id)} / {_escape(subject)}: {_escape(change.candidate)}"
+        )
 
     lines.extend(["", "## Judge score deltas", ""])
     if not comparison.score_deltas:

@@ -10,38 +10,54 @@ from understudy.records import (
     Turn,
 )
 
-
 DIMENSIONS = {"clarity", "relevance", "progression", "naturalness", "concision"}
 
 
 def record() -> ScenarioRecord:
     scenario = Scenario(
-        "booking", "busy patient", "I need Tuesday", "appointment booked", 3,
+        "booking",
+        "busy patient",
+        "I need Tuesday",
+        "appointment booked",
+        3,
         ["booked"],
     )
     return ScenarioRecord(
         scenario,
         Observation("How can I help?", {"status": "active"}, "exposed"),
-        [Turn("Tuesday works", Observation("Please confirm Tuesday at 10.", {
-            "status": "awaiting_confirmation"
-        }, "exposed"))],
+        [
+            Turn(
+                "Tuesday works",
+                Observation(
+                    "Please confirm Tuesday at 10.",
+                    {"status": "awaiting_confirmation"},
+                    "exposed",
+                ),
+            )
+        ],
         "customer-ended",
         checks=[CheckResult("confirmation-before-booking", "pass", "No early booking")],
     )
 
 
 def valid_payload(score: int = 3) -> str:
-    return json.dumps({
-        "scores": {dimension: score for dimension in DIMENSIONS},
-        "explanations": {dimension: f"Evidence for {dimension}." for dimension in DIMENSIONS},
-    })
+    return json.dumps(
+        {
+            "scores": {dimension: score for dimension in DIMENSIONS},
+            "explanations": {
+                dimension: f"Evidence for {dimension}." for dimension in DIMENSIONS
+            },
+        }
+    )
 
 
 def test_rubric_has_five_anchored_public_dimensions():
     assert set(RUBRIC) == DIMENSIONS
     assert all(set(anchors) == {0, 1, 2, 3, 4} for anchors in RUBRIC.values())
-    assert all(all(isinstance(text, str) and text for text in anchors.values())
-               for anchors in RUBRIC.values())
+    assert all(
+        all(isinstance(text, str) and text for text in anchors.values())
+        for anchors in RUBRIC.values()
+    )
 
 
 def test_evaluate_judge_sends_only_public_scenario_and_transcript():
@@ -60,16 +76,19 @@ def test_evaluate_judge_sends_only_public_scenario_and_transcript():
     prompt = json.loads(seen[0][0][1]["content"])
     assert prompt["scenario"]["expected_outcome"] == "appointment booked"
     assert prompt["transcript"][1] == {
-        "customer": "Tuesday works", "assistant": "Please confirm Tuesday at 10."
+        "customer": "Tuesday works",
+        "assistant": "Please confirm Tuesday at 10.",
     }
     assert all(set(turn) <= {"customer", "assistant"} for turn in prompt["transcript"])
 
 
 def test_evaluate_judge_retries_once_after_duplicate_or_invalid_fields():
-    responses = iter([
-        '{"scores":{"clarity":3,"clarity":4},"explanations":{}}',
-        valid_payload(4),
-    ])
+    responses = iter(
+        [
+            '{"scores":{"clarity":3,"clarity":4},"explanations":{}}',
+            valid_payload(4),
+        ]
+    )
     calls = 0
 
     def complete(messages, *, json_output):
@@ -85,10 +104,14 @@ def test_evaluate_judge_retries_once_after_duplicate_or_invalid_fields():
 
 def test_evaluate_judge_rejects_boolean_out_of_range_and_extra_dimensions():
     payloads = [
-        {"scores": {**{key: 3 for key in DIMENSIONS}, "clarity": True},
-         "explanations": {key: "evidence" for key in DIMENSIONS}},
-        {"scores": {**{key: 3 for key in DIMENSIONS}, "clarity": 5, "tone": 3},
-         "explanations": {key: "evidence" for key in DIMENSIONS}},
+        {
+            "scores": {**{key: 3 for key in DIMENSIONS}, "clarity": True},
+            "explanations": {key: "evidence" for key in DIMENSIONS},
+        },
+        {
+            "scores": {**{key: 3 for key in DIMENSIONS}, "clarity": 5, "tone": 3},
+            "explanations": {key: "evidence" for key in DIMENSIONS},
+        },
     ]
     calls = 0
 
