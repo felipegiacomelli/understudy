@@ -20,7 +20,9 @@ Neither layer borrows the target's correctness predicate. Missing state is repor
 
 ## What the experiment has established
 
-Implementation and live evidence are still in progress. No measured provider result or judge disagreement is claimed here. The final article will identify the actual recorded turns and comparison output; illustrative examples will not be presented as a population pass rate.
+The [end-to-end regression test](tests/test_cli.py) exercises the real clinic, evaluator, judge parser and comparison with scripted provider responses. The healthy run passes. Bypassing confirmation causes an observed booking and a failing invariant, even when the scripted judge gives every quality dimension 4/4. A malformed target response is retained as an execution error.
+
+That establishes a property of the harness, not the behavior of a live model. It does not show that an actual judge was fooled. Live provider verification and illustrative recordings remain pending; the publication version will link the actual recorded turns and generated report. A selected pair will not be presented as a population pass rate.
 
 ## Where the argument stops
 

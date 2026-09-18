@@ -4,7 +4,7 @@
 
 The central experiment deliberately removes the receptionist's confirmation guard. Can the evaluation catch an appointment booked without permission, even when the response sounds helpful?
 
-**Status:** implementation in progress. No live recordings or measured results have been published. Scripted tests will establish the invariant; live experiments will test the provider integration and supply illustrative evidence. Neither is a production-safety guarantee.
+**Status:** the offline implementation and scripted regression tests are available; live provider verification and illustrative recordings are pending. No live-model results or pass rates are claimed. Neither scripted nor live evaluation is a production-safety guarantee.
 
 ```mermaid
 flowchart LR
@@ -45,6 +45,40 @@ No edited model replies or judge scores to manufacture success. Selected recordi
 Six scenarios exercise booking, missing information, declined confirmation, unavailable slots, cancellation followed by rebooking, and handoff persistence. One fault, `premature_booking`, bypasses confirmation while retaining other validation.
 
 This is intentionally a case study, not a general evaluation framework. There is no dashboard, provider ecosystem, replay engine, cost calculator or persistence service.
+
+## Try the evidence path without API keys
+
+From this checkout, with Python 3.12+ and uv:
+
+```bash
+uv sync --frozen --extra dev
+uv run pytest -q
+uv run pytest tests/test_cli.py -k seeded_fault -v
+```
+
+The focused test runs the actual clinic, checks, judge parser, persistence and comparison using scripted provider responses. It asserts that the healthy run passes, the fault is detected even with scripted quality scores of 4/4, and a malformed target response produces an error. These are executable regression tests, **not recordings of model behavior**.
+
+Follow the implementation: [target and store](src/understudy/clinic.py) → [independent checks](src/understudy/checks.py) → [quality rubric](src/understudy/judge.py) → [comparison](src/understudy/report.py). The [test](tests/test_cli.py) connects that path end to end.
+
+## Run a live experiment
+
+Live runs incur provider charges. Supply `OPENAI_API_KEY` and `DEEPSEEK_API_KEY` in your shell environment; the application does not read `.env` files. Use fresh output paths:
+
+```bash
+uv run understudy run --output runs/baseline.json
+uv run understudy run --fault premature_booking --output runs/seeded-bug.json
+uv run understudy compare runs/baseline.json runs/seeded-bug.json
+```
+
+Exit codes are **0** for a passing run/no new regression, **1** for an evaluation failure/regression, and **2** for invalid/incompatible evidence or execution/judge errors. A detected seeded regression should exit 1. Comparison needs no keys and compares stored results; it does not rerun the agent or checks. An unchanged failing baseline can produce “no new regression” while its failures remain visible.
+
+Provider defaults were checked against official documentation on 2026-09-18: [OpenAI GPT-4.1 mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini), snapshot `gpt-4.1-mini-2025-04-14`, and [DeepSeek Flash](https://api-docs.deepseek.com/), identifier `deepseek-flash`. DeepSeek uses [non-thinking mode](https://api-docs.deepseek.com/api/create-chat-completion/). These integrations still need a live verification run. Each request has a 30-second timeout, an 800-token output limit and no transport retries. The judge retries malformed JSON once. Available token counts and resolved model identifiers are recorded; no billing estimates are calculated.
+
+## What confirmation means in this demonstration
+
+The fictional receptionist asks for the exact word `CONFIRM` against specific name/type/slot details. The executor enforces that bounded protocol independently of the model's interpretation. It is intentionally narrower than interpreting consent in arbitrary natural language. The seeded fault bypasses that guard; the evaluator examines recorded customer messages and exposed effects separately.
+
+Runs use isolated storage and the fictional date 2030-04-15. Existing output files are never overwritten. Interrupted files are invalid evidence; restart with a fresh path. There is no recovery or resume subsystem.
 
 ## Limitations
 
