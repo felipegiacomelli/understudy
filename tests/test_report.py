@@ -1,11 +1,13 @@
+from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
+from understudy.checks import evaluate_checks
 from understudy.judge import RUBRIC
 from understudy.records import (
-    CheckResult,
+    Action,
     JudgeResult,
     Observation,
     RunRecord,
@@ -29,22 +31,42 @@ def run(
     explanation="booking happened",
     model="one",
 ):
-    scenario = Scenario("booking", "persona", "hello", "booked", 2, ["booked"])
+    scenario = Scenario("booking", "persona", "hello", "active", 2, ["active"])
+    active = {"status": "active", "appointments": []}
+    if check_status == "fail":
+        details = {
+            "name": "Ava Stone",
+            "appointment_type": "consultation",
+            "slot": "2030-04-15T09:00",
+        }
+        booked = {
+            "status": "booked",
+            "appointments": [{**details, "appointment_id": "apt-1"}],
+        }
+        observation = Observation(
+            "Booked *now*",
+            booked,
+            "exposed",
+            [Action("book", details, {"after": booked}, "succeeded")],
+        )
+    else:
+        observation = Observation("Still active", active, "exposed")
     record = ScenarioRecord(
         scenario,
-        Observation("Welcome", {"status": "active"}, "exposed"),
-        [Turn("Book it", Observation("Booked *now*", {"status": "booked"}, "exposed"))],
+        Observation("Welcome", active, "exposed"),
+        [Turn("Book it", observation)],
         "terminal",
         error=record_error,
-        checks=[
-            CheckResult("confirmation-before-booking", check_status, explanation, 0)
-        ],
         judge=JudgeResult(
             {dimension: score for dimension in RUBRIC},
             {dimension: "clear evidence" for dimension in RUBRIC},
             judge_error,
         ),
     )
+    record.checks = evaluate_checks(record)
+    next(
+        check for check in record.checks if check.id == "confirmation-before-booking"
+    ).explanation = explanation
     signature = (
         signature
         if signature != "sig"
@@ -193,3 +215,24 @@ def test_committed_live_evidence_detects_the_named_regression():
         render_report(comparison).rstrip()
         == (examples / "comparison.md").read_text().rstrip()
     )
+
+
+def test_compare_rejects_stored_checks_that_do_not_match_evidence():
+    examples = Path(__file__).parents[1] / "examples"
+    run = deepcopy(load_run(examples / "baseline.json"))
+    state_checks = {
+        "state-evidence",
+        "state-types",
+        "allowed-transitions",
+        "final-outcome",
+    }
+    for record in run.records:
+        record.initial_observation.state = None
+        record.initial_observation.state_source = "unavailable"
+        for turn in record.turns:
+            turn.observation.state = None
+            turn.observation.state_source = "unavailable"
+        record.checks = [check for check in record.checks if check.id not in state_checks]
+
+    with pytest.raises(ValueError, match="checks do not match observed evidence"):
+        compare_runs(run, run)

@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 
+from .checks import evaluate_checks
 from .judge import RUBRIC, scenario_status
 from .records import RunRecord, ScenarioRecord, evaluation_signature
 
@@ -56,9 +57,17 @@ def _validate_run(run: RunRecord) -> dict[str, ScenarioRecord]:
     for scenario_id, record in records.items():
         if record.scenario != scenarios[scenario_id]:
             raise ValueError(f"Record does not match stored scenario: {scenario_id}")
-        _index(record.checks, lambda value: value.id, f"check in {scenario_id}")
-        if not record.checks:
-            raise ValueError(f"Missing checks for scenario: {scenario_id}")
+        checks = _index(
+            record.checks, lambda value: value.id, f"check in {scenario_id}"
+        )
+        expected_checks = {check.id: check for check in evaluate_checks(record)}
+        if set(checks) != set(expected_checks) or any(
+            checks[check_id].status != expected.status
+            for check_id, expected in expected_checks.items()
+        ):
+            raise ValueError(
+                f"Stored checks do not match observed evidence: {scenario_id}"
+            )
         if any(
             check.status not in {"pass", "fail", "error", "unsupported"}
             for check in record.checks
