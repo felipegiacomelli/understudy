@@ -7,5 +7,6 @@ build/
 dist/
 .env
 .env.*
+.gh-pr-token
 runs/
 .superpowers/
