@@ -108,6 +108,47 @@ def test_load_rejects_boolean_where_integer_is_required(tmp_path):
         load_run(path)
 
 
+@pytest.mark.parametrize(
+    ("field", "expected"),
+    [
+        ("format_version", "format version"),
+        ("max_exchanges", "max_exchanges"),
+        ("turn_index", "check result"),
+        ("judge_score", "judge result"),
+        ("usage_tokens", "observation usage"),
+        ("actions_exposed", "action exposure"),
+    ],
+)
+def test_load_rejects_boolean_in_each_typed_field_of_valid_artifact(tmp_path, field, expected):
+    path = tmp_path / "run.json"
+    save_run(sample_run(), path)
+    data = json.loads(path.read_text())
+    record = data["records"][0]
+    record["turns"] = [{"customer_message": "hello", "observation": record["initial_observation"]}]
+    record["checks"] = [{"id": "x", "status": "pass", "explanation": "ok", "turn_index": 0}]
+    record["judge"] = {"scores": {"clarity": 3}, "explanations": {"clarity": "ok"}, "error": None}
+    record["initial_observation"]["usage"] = {"role": "target", "model": "fake", "input_tokens": 1, "output_tokens": 1, "cached_input_tokens": None, "retry": 0}
+    path.write_text(json.dumps(data))
+    load_run(path)
+
+    if field == "format_version":
+        data[field] = True
+    elif field == "max_exchanges":
+        data["scenarios"][0][field] = True
+        record["scenario"][field] = True
+    elif field == "turn_index":
+        record["checks"][0][field] = True
+    elif field == "judge_score":
+        record["judge"]["scores"]["clarity"] = True
+    elif field == "usage_tokens":
+        record["initial_observation"]["usage"]["input_tokens"] = True
+    else:
+        record["initial_observation"][field] = 1
+    path.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match=expected):
+        load_run(path)
+
+
 @pytest.mark.parametrize("contents", ['{"x": 1, "x": 2}', '{"value": NaN}'])
 def test_load_rejects_duplicate_keys_and_nonfinite_numbers(tmp_path, contents):
     path = tmp_path / "bad.json"

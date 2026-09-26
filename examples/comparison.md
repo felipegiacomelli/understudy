@@ -1,72 +1,70 @@
 # Understudy comparison: REGRESSION
 
-- **Baseline:** run a312f1d5-9766-4861-bbee-a26ba38fce05; model gpt-4.1-mini-2025-04-14; revision clinic-v1; fault none
-- **Candidate:** run db8354f1-6852-47c9-b90c-af5c7eab3be4; model gpt-4.1-mini-2025-04-14; revision clinic-v1; fault premature\_booking
+- **Baseline:** run 6cc2a7cf-b37b-4b3a-ac8a-340249539fe4; model gpt-4.1-mini-2025-04-14; revision clinic-v1; fault none
+- **Candidate:** run d942836c-b46a-4f31-a2c5-6714818f6be9; model gpt-4.1-mini-2025-04-14; revision clinic-v1; fault premature\_booking
 
 Uncalibrated pass threshold: every judge dimension must score at least 3.
 
 ## Scenario results
 
-| Scenario | Baseline | Candidate |
-|---|---:|---:|
-| cancel-rebook | pass | fail |
-| declined-confirmation | fail | fail |
-| human-handoff | fail | fail |
-| missing-information | fail | fail |
-| successful-booking | pass | fail |
-| unavailable-slot | fail | pass |
+| Scenario | Baseline checks | Baseline judge | Candidate checks | Candidate judge |
+|---|---:|---:|---:|---:|
+| cancel-rebook | pass | fail (progression 2) | fail | pass |
+| declined-confirmation | pass | pass | pass | pass |
+| human-handoff | pass | pass | pass | fail (progression 2) |
+| missing-information | pass | fail (progression 2) | fail | fail (progression 2) |
+| successful-booking | pass | pass | fail | fail (progression 2) |
+| unavailable-slot | pass | pass | pass | pass |
 
 ## Regressions
 
-- **cancel-rebook / scenario**: pass → fail
-- **cancel-rebook / allowed-transitions**: pass → fail (turn 4) — Observed an illegal state transition.
-  - Evidence: customer: "Please go ahead and book it."; assistant: "I am booking the consultation for Ava Stone at 10:00 on April 15, 2030."; actions: book
-- **cancel-rebook / confirmation-before-booking**: pass → fail (turn 4) — Booking succeeded without customer confirmation of those exact prior details.
-  - Evidence: customer: "Please go ahead and book it."; assistant: "I am booking the consultation for Ava Stone at 10:00 on April 15, 2030."; actions: book
-- **declined-confirmation / confirmation-before-booking**: pass → fail (turn 1) — Booking succeeded without customer confirmation of those exact prior details.
-  - Evidence: customer: "Book a consultation for Ava Stone at 2030-04-15T09:00"; assistant: "You requested to book a consultation for Ava Stone on 2030-04-15 at 09:00. Please confirm by replying with 'CONFIRM' to finalize the booking or let me know if you want to change the details."; actions: book
-- **declined-confirmation / final-outcome**: pass → fail — Final exposed status is 'booked'; expected 'active'.
-- **declined-confirmation / forbidden-actions**: pass → fail — Booking succeeded when booking was not expected.
+- **cancel-rebook / confirmation-before-booking**: pass → fail (turn 3) — Booking succeeded without customer confirmation of those exact prior details.
+  - Evidence: customer: "Please give me the name of the new appointment once it’s booked."; assistant: "Booking the consultation for Ava Stone at 10:00 on April 15 now. I will provide you with the new appointment name once it's confirmed."; actions: book
+- **human-handoff / scenario**: pass → fail
+- **human-handoff / progression**: 3 → 2
+- **missing-information / closure**: pass → fail — Scenario closed with exchange-limit.
+- **missing-information / expected-replies**: pass → fail (turn 3) — An ordinary reply was empty.
+  - Evidence: customer: "I'd really prefer not to share any name. If that's not possible, I'll leave it."; assistant: ""
+- **missing-information / final-outcome**: pass → fail — Final exposed status is 'handed\_off'; expected 'active'.
 - **successful-booking / scenario**: pass → fail
 - **successful-booking / confirmation-before-booking**: pass → fail (turn 1) — Booking succeeded without customer confirmation of those exact prior details.
-  - Evidence: customer: "Book a consultation for Ava Stone at 2030-04-15T09:00"; assistant: "I have you requesting a consultation for Ava Stone on 2030-04-15 at 09:00. Please confirm by saying CONFIRM to finalize the booking or let me know if you want to change anything."; actions: book
+  - Evidence: customer: "Book a consultation for Ava Stone at 2030-04-15T09:00"; assistant: "Please confirm that you want to book a consultation for Ava Stone on 2030-04-15 at 09:00."; actions: book
+- **successful-booking / progression**: 4 → 2
 
 ## Existing failures
 
-- declined-confirmation / scenario: fail
-- human-handoff / scenario: fail
+- cancel-rebook / scenario: fail
 - missing-information / scenario: fail
-- missing-information / closure: fail
 
 ## Judge score deltas
 
-- cancel-rebook / clarity: -1
-- cancel-rebook / concision: -1
-- cancel-rebook / naturalness: -1
-- cancel-rebook / progression: -1
-- cancel-rebook / relevance: -1
+- cancel-rebook / clarity: +1
+- cancel-rebook / concision: +0
+- cancel-rebook / naturalness: +1
+- cancel-rebook / progression: +1
+- cancel-rebook / relevance: +1
 - declined-confirmation / clarity: +0
 - declined-confirmation / concision: +0
-- declined-confirmation / naturalness: -1
-- declined-confirmation / progression: +1
-- declined-confirmation / relevance: +0
-- human-handoff / clarity: +0
-- human-handoff / concision: +1
-- human-handoff / naturalness: +0
+- declined-confirmation / naturalness: +0
+- declined-confirmation / progression: +0
+- declined-confirmation / relevance: -1
+- human-handoff / clarity: -1
+- human-handoff / concision: -1
+- human-handoff / naturalness: -1
 - human-handoff / progression: -1
 - human-handoff / relevance: -1
 - missing-information / clarity: -1
-- missing-information / concision: -1
+- missing-information / concision: +0
 - missing-information / naturalness: -1
 - missing-information / progression: +0
-- missing-information / relevance: -1
-- successful-booking / clarity: +1
+- missing-information / relevance: +0
+- successful-booking / clarity: +0
 - successful-booking / concision: +0
-- successful-booking / naturalness: +0
-- successful-booking / progression: +0
+- successful-booking / naturalness: -1
+- successful-booking / progression: -2
 - successful-booking / relevance: +0
 - unavailable-slot / clarity: +0
-- unavailable-slot / concision: +0
+- unavailable-slot / concision: +1
 - unavailable-slot / naturalness: +0
 - unavailable-slot / progression: +0
 - unavailable-slot / relevance: +0

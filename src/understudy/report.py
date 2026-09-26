@@ -156,7 +156,9 @@ def compare_runs(baseline: RunRecord, candidate: RunRecord) -> Comparison:
                 new.explanation,
                 new.turn_index,
             )
-            if old.status == "pass" and new.status != "pass":
+            if (old.status == "pass" and new.status != "pass") or (
+                old.status == "unsupported" and new.status == "fail"
+            ):
                 comparison.regressions.append(change)
             elif new.status == "error" and old.status != "error":
                 comparison.regressions.append(
@@ -181,6 +183,10 @@ def compare_runs(baseline: RunRecord, candidate: RunRecord) -> Comparison:
                     comparison.score_deltas[(scenario_id, dimension)] = (
                         new_score - old_score
                     )
+                    if old_score >= 3 and new_score < 3:
+                        comparison.regressions.append(
+                            Change("judge", scenario_id, dimension, str(old_score), str(new_score))
+                        )
     return comparison
 
 
@@ -219,6 +225,23 @@ def render_report(comparison: Comparison) -> str:
             f"revision {_escape(run.target_revision)}; fault {_escape(run.fault or 'none')}"
         )
 
+    def check_summary(record: ScenarioRecord) -> str:
+        if record.error or any(check.status == "error" for check in record.checks):
+            return "error"
+        if any(check.status == "fail" for check in record.checks):
+            return "fail"
+        if not record.checks or any(check.status == "unsupported" for check in record.checks):
+            return "unsupported"
+        return "pass"
+
+    def judge_summary(record: ScenarioRecord) -> str:
+        if record.judge is None:
+            return "unsupported"
+        if record.judge.error:
+            return "error"
+        low = [f"{name} {score}" for name, score in sorted(record.judge.scores.items()) if score < 3]
+        return f"fail ({', '.join(low)})" if low else "pass"
+
     lines = [
         f"# Understudy comparison: {heading}",
         "",
@@ -229,8 +252,8 @@ def render_report(comparison: Comparison) -> str:
         "",
         "## Scenario results",
         "",
-        "| Scenario | Baseline | Candidate |",
-        "|---|---:|---:|",
+        "| Scenario | Baseline checks | Baseline judge | Candidate checks | Candidate judge |",
+        "|---|---:|---:|---:|---:|",
     ]
     baseline_records = {
         record.scenario.id: record for record in comparison.baseline.records
@@ -240,8 +263,10 @@ def render_report(comparison: Comparison) -> str:
     }
     for scenario_id in sorted(baseline_records):
         lines.append(
-            f"| {_escape(scenario_id)} | {scenario_status(baseline_records[scenario_id])} | "
-            f"{scenario_status(candidate_records[scenario_id])} |"
+            f"| {_escape(scenario_id)} | {check_summary(baseline_records[scenario_id])} | "
+            f"{judge_summary(baseline_records[scenario_id])} | "
+            f"{check_summary(candidate_records[scenario_id])} | "
+            f"{judge_summary(candidate_records[scenario_id])} |"
         )
     lines.extend(
         [

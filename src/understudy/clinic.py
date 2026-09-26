@@ -62,6 +62,7 @@ class ClinicTarget:
         self.decide, self.fault = decide, fault
         self._initial_appointments = deepcopy(appointments or [])
         self.appointments: list[dict] = []
+        self._next_appointment_id = 1
         self.state: dict[str, JsonValue] = {}
         self._pending: dict[str, JsonValue] | None = None
         self._confirmed: dict[str, JsonValue] | None = None
@@ -70,6 +71,16 @@ class ClinicTarget:
 
     def reset(self) -> Observation:
         self.appointments = deepcopy(self._initial_appointments)
+        self._next_appointment_id = 1 + max(
+            (
+                int(item["appointment_id"][4:])
+                for item in self.appointments
+                if isinstance(item.get("appointment_id"), str)
+                and item["appointment_id"].startswith("APT-")
+                and item["appointment_id"][4:].isdigit()
+            ),
+            default=0,
+        )
         self.state = {"status": "active", "appointments": deepcopy(self.appointments)}
         self._pending = self._confirmed = None
         self._confirmation_message = None
@@ -142,8 +153,9 @@ class ClinicTarget:
             else:
                 appointment = {
                     **core,
-                    "appointment_id": f"APT-{len(self.appointments) + 1}",
+                    "appointment_id": f"APT-{self._next_appointment_id}",
                 }
+                self._next_appointment_id += 1
                 self.appointments.append(appointment)
                 self.state["status"] = "booked"
             arguments.update(
@@ -180,5 +192,6 @@ class ClinicTarget:
         self, reply: str, actions: list[Action] | None = None
     ) -> Observation:
         return Observation(
-            str(reply), deepcopy(self.state), "exposed", deepcopy(actions or [])
+            str(reply), deepcopy(self.state), "exposed", deepcopy(actions or []),
+            actions_exposed=True,
         )

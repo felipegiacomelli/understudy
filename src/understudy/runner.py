@@ -52,7 +52,7 @@ def run_scenario(
                 for turn in turns
             ]
             message = customer.reply(visible)
-            if message == END_SENTINEL:
+            if message.strip().endswith(END_SENTINEL):
                 closure = "customer-ended"
                 break
     except (

@@ -48,12 +48,13 @@ def run(
             booked,
             "exposed",
             [Action("book", details, {"after": booked}, "succeeded")],
+            actions_exposed=True,
         )
     else:
-        observation = Observation("Still active", active, "exposed")
+        observation = Observation("Still active", active, "exposed", actions_exposed=True)
     record = ScenarioRecord(
         scenario,
-        Observation("Welcome", active, "exposed"),
+        Observation("Welcome", active, "exposed", actions_exposed=True),
         [Turn("Book it", observation)],
         "terminal",
         error=record_error,
@@ -193,7 +194,35 @@ def test_report_identifies_runs_and_lists_every_scenario_status():
     assert "old-model" in report
     assert "new-model" in report
     assert "premature\\_booking" in report
-    assert "| booking | pass | pass |" in report
+    assert "| booking | pass | pass | pass | pass |" in report
+
+
+def test_report_separates_check_and_judge_failures():
+    baseline = run(score=2)
+    candidate = run(score=3)
+    report = render_report(compare_runs(baseline, candidate))
+    assert "| Scenario | Baseline checks | Baseline judge | Candidate checks | Candidate judge |" in report
+    assert "| booking | pass | fail (clarity 2" in report
+    assert "| pass | pass |" in report
+
+
+def test_new_failure_after_unsupported_evidence_is_regression():
+    baseline = run()
+    baseline.records[0].turns[0].observation.actions_exposed = False
+    baseline.records[0].checks = evaluate_checks(baseline.records[0])
+    candidate = run(check_status="fail")
+    old = next(check for check in baseline.records[0].checks if check.id == "confirmation-before-booking")
+    assert old.status == "unsupported"
+    new = next(check for check in candidate.records[0].checks if check.id == "confirmation-before-booking")
+    assert new.status == "fail"
+    # This transition is meaningful even when the scenario was already failing.
+    from understudy.report import Change
+    assert Change("check", "booking", old.id, "unsupported", "fail", new.explanation, new.turn_index) in compare_runs(baseline, candidate).regressions
+
+
+def test_judge_threshold_drop_is_visible_when_checks_already_fail():
+    comparison = compare_runs(run(check_status="fail", score=3), run(check_status="fail", score=2))
+    assert any(change.kind == "judge" and change.check_id == "clarity" for change in comparison.regressions)
 
 
 def test_committed_live_evidence_detects_the_named_regression():
@@ -205,12 +234,15 @@ def test_committed_live_evidence_detects_the_named_regression():
 
     assert comparison.has_regression
     assert any(
-        change.scenario_id == "declined-confirmation"
+        change.scenario_id == "cancel-rebook"
         and change.check_id == "confirmation-before-booking"
         and change.baseline == "pass"
         and change.candidate == "fail"
         for change in comparison.regressions
     )
+    assert all(score >= 3 for score in next(
+        record for record in candidate.records if record.scenario.id == "cancel-rebook"
+    ).judge.scores.values())
     assert (
         render_report(comparison).rstrip()
         == (examples / "comparison.md").read_text().rstrip()

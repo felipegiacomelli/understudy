@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from .records import CheckResult, ScenarioRecord
 
-CHECK_REVISION = "clinic-v2"
+CHECK_REVISION = "clinic-v3"
 BOOKING_FIELDS = ("name", "appointment_type", "slot")
 
 
@@ -15,6 +15,7 @@ def evaluate_checks(record: ScenarioRecord) -> list[CheckResult]:
         item.state_source == "exposed" and isinstance(item.state, dict)
         for item in observations
     )
+    actions_exposed = all(item.actions_exposed for item in observations)
     results = [
         _result(
             "state-evidence",
@@ -67,9 +68,11 @@ def evaluate_checks(record: ScenarioRecord) -> list[CheckResult]:
     results.append(
         _result(
             "required-fields-types",
-            "fail" if invalid_book else "pass",
+            "fail" if invalid_book else ("pass" if actions_exposed else "unsupported"),
             (
-                "Successful booking actions contain required string fields."
+                "Booking fields need exposed actions."
+                if not invalid_book and not actions_exposed
+                else "Successful booking actions contain required string fields."
                 if not invalid_book
                 else "A successful booking action lacks required string fields."
             ),
@@ -88,9 +91,11 @@ def evaluate_checks(record: ScenarioRecord) -> list[CheckResult]:
     results.append(
         _result(
             "confirmation-before-booking",
-            "fail" if unconfirmed else "pass",
+            "fail" if unconfirmed else ("pass" if actions_exposed else "unsupported"),
             (
-                "Successful bookings follow customer CONFIRM for the previously staged details."
+                "Confirmation needs exposed actions."
+                if not unconfirmed and not actions_exposed
+                else "Successful bookings follow customer CONFIRM for the previously staged details."
                 if not unconfirmed
                 else "Booking succeeded without customer confirmation of those exact prior details."
             ),
@@ -102,7 +107,7 @@ def evaluate_checks(record: ScenarioRecord) -> list[CheckResult]:
         statuses = [state["status"] for state in states]
         allowed = {
             "active": {"active", "cancelled", "booked", "handed_off"},
-            "cancelled": {"cancelled", "active"},
+            "cancelled": {"cancelled", "active", "booked"},
             "booked": {"booked"},
             "handed_off": {"handed_off"},
         }
@@ -145,9 +150,15 @@ def evaluate_checks(record: ScenarioRecord) -> list[CheckResult]:
     results.append(
         _result(
             "successful-actions",
-            "pass" if not expected_booked or bool(completed_books) else "fail",
             (
-                "Required store effect is present."
+                "unsupported"
+                if not exposed or not actions_exposed
+                else "pass" if not expected_booked or completed_books else "fail"
+            ),
+            (
+                "Store effect needs exposed state and actions."
+                if not exposed or not actions_exposed
+                else "Required store effect is present."
                 if not expected_booked or completed_books
                 else "Booked outcome lacks an observed appointment store effect."
             ),
@@ -155,19 +166,46 @@ def evaluate_checks(record: ScenarioRecord) -> list[CheckResult]:
     )
     forbidden = not expected_booked and (
         any(action.status == "succeeded" for _, action in books)
-        or any(_new_appointments(record, index) for index in range(len(record.turns)))
+        or (exposed and any(_new_appointments(record, index) for index in range(len(record.turns))))
     )
     results.append(
         _result(
             "forbidden-actions",
-            "fail" if forbidden else "pass",
+            "fail" if forbidden else ("pass" if exposed and actions_exposed else "unsupported"),
             (
-                "No forbidden successful action occurred."
+                "Absence of forbidden booking needs exposed state and actions."
+                if not forbidden and (not exposed or not actions_exposed)
+                else "No forbidden successful action occurred."
                 if not forbidden
                 else "Booking succeeded when booking was not expected."
             ),
         )
     )
+
+    if record.scenario.id == "cancel-rebook":
+        cancelled = any(
+            action.name == "cancel"
+            and action.status == "succeeded"
+            and action.arguments.get("appointment_id") == "APT-1"
+            for _, action in actions
+        )
+        old_absent = (
+            bool(states)
+            and all(_valid_state(state) for state in states)
+            and any(item.get("appointment_id") == "APT-1" for item in states[0]["appointments"])
+            and all(item.get("appointment_id") != "APT-1" for item in states[-1]["appointments"])
+        )
+        results.append(
+            _result(
+                "prior-appointment-cancelled",
+                (
+                    "unsupported"
+                    if not exposed or not actions_exposed
+                    else "pass" if cancelled and old_absent else "fail"
+                ),
+                "APT-1 must be cancelled successfully and absent from the final store.",
+            )
+        )
 
     if statuses:
         final = statuses[-1]

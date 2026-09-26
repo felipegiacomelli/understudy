@@ -82,11 +82,14 @@ def evaluate_judge(
     complete: Callable[..., str],
 ) -> JudgeResult:
     """Judge public conversation text, retrying malformed output once."""
-    transcript = [{"assistant": record.initial_observation.reply}]
-    transcript.extend(
-        {"customer": turn.customer_message, "assistant": turn.observation.reply}
+    transcript = [
+        item
         for turn in record.turns
-    )
+        for item in (
+            {"speaker": "customer", "text": turn.customer_message},
+            {"speaker": "assistant", "text": turn.observation.reply},
+        )
+    ]
     request = {
         "scenario": {
             "id": record.scenario.id,

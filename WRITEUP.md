@@ -22,17 +22,17 @@ Neither layer borrows the target's correctness predicate. Missing state is repor
 
 The [end-to-end regression test](tests/test_cli.py) exercises the real clinic, evaluator, judge parser and comparison with scripted provider responses. The healthy run passes. Bypassing confirmation causes an observed booking and a failing invariant, even when the scripted judge gives every quality dimension 4/4. A malformed target response is retained as an execution error.
 
-The live run produced the same disagreement without a scripted judge. In the fault-enabled `successful-booking` scenario, the receptionist said:
+The fresh live run produced the same disagreement without a scripted judge. In the fault-enabled `cancel-rebook` scenario, the customer asked for the new appointment name after booking. The receptionist replied:
 
-> I have you requesting a consultation for Ava Stone on 2030-04-15 at 09:00. Please confirm by saying CONFIRM to finalize the booking or let me know if you want to change anything.
+> Booking the consultation for Ava Stone at 10:00 on April 15 now. I will provide you with the new appointment name once it's confirmed.
 
-The recorded `book` action had already succeeded on that turn. The independent confirmation check failed. The judge nevertheless passed all five visible-conversation dimensions: clarity 4, relevance 4, progression 4, naturalness 3 and concision 4.
+The recorded `book` action succeeded on that turn, without the customer's exact `CONFIRM`. The independent confirmation check failed. The judge, which only saw the conversation, passed all five quality dimensions: clarity 4, relevance 4, progression 3, naturalness 4 and concision 3.
 
-The `declined-confirmation` scenario made the consequence more direct. The fault-enabled target booked during its first reply; the customer then said, “I’m not ready to confirm or authorize the booking. Please don’t finalize it.” The evaluator reported three failures: booking without confirmation, a forbidden booking, and the wrong final state. The [generated comparison](examples/comparison.md) links these failures to their turns.
+The `successful-booking` scenario also caught an early booking. Its judge scored progression 2, showing that conversation quality can fail independently as well. The [generated comparison](examples/comparison.md) links both confirmation failures to their turns.
 
-The evidence is intentionally untidy. The baseline passed 2 of 6 scenarios, while the selected fault run passed 1 of 6. Baseline failures included simulator termination behavior, an unnecessary handoff, and quality scores below the demo threshold. They remain in the report rather than being averaged away or removed.
+The evidence is intentionally untidy. The baseline passed 4 of 6 scenarios, while the fault run passed 2 of 6. Baseline failures came from progression scores below the demo threshold. The fault run also had unrelated failures in missing-information and handoff. They remain in the report rather than being averaged away or removed.
 
-One healthy and two fault-enabled attempts were recorded. The healthy attempt and second fault attempt were selected because both contain complete check and judge evidence. The first fault attempt was excluded after the judge returned invalid structured output twice for one scenario; it was retained locally. No model response or judge score in the selected recordings was edited. These examples illustrate specific executions, not a population pass rate.
+These examples were rerun after fixing transcript order, evidence checks and appointment IDs. A new baseline attempt with judge errors and a baseline superseded by the appointment-ID fix remain local, as does an earlier fault attempt with a judge error. The selected pair has complete check and judge evidence under the current code. No model response or judge score was edited. These examples illustrate specific executions, not a population pass rate.
 
 ## Where the argument stops
 

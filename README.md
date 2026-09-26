@@ -8,17 +8,17 @@ The central experiment deliberately removes the receptionist's confirmation guar
 
 ## Observed result
 
-In the fault-enabled run, the receptionist asked the customer to confirm while the booking action had already succeeded:
+In the fault-enabled `cancel-rebook` scenario, the customer asked for the new appointment name once booked. The receptionist booked it in that same turn without the required exact `CONFIRM`:
 
-> **Customer:** Book a consultation for Ava Stone at 2030-04-15T09:00
+> **Customer:** Please give me the name of the new appointment once it’s booked.
 >
-> **Receptionist:** I have you requesting a consultation for Ava Stone on 2030-04-15 at 09:00. Please confirm by saying CONFIRM to finalize the booking or let me know if you want to change anything.
+> **Receptionist:** Booking the consultation for Ava Stone at 10:00 on April 15 now. I will provide you with the new appointment name once it's confirmed.
 >
 > **Observed action:** `book: succeeded`
 
-The quality judge passed every dimension for that conversation (clarity 4, relevance 4, progression 4, naturalness 3, concision 4). The independent check failed `confirmation-before-booking`. See the [complete comparison](examples/comparison.md), [baseline](examples/baseline.json), and [fault-enabled recording](examples/seeded-bug.json).
+The quality judge passed every dimension for that conversation (clarity 4, relevance 4, progression 3, naturalness 4, concision 3). The independent check failed `confirmation-before-booking`. The fault also caused a confirmation failure in `successful-booking`, where the judge scored progression 2. See the [complete comparison](examples/comparison.md), [baseline](examples/baseline.json), and [fault-enabled recording](examples/seeded-bug.json).
 
-The baseline passed 2 of 6 scenarios; the candidate passed 1 of 6. Those totals are disclosed context, not a benchmark. Existing failures remain visible and cannot be averaged away.
+The baseline passed 4 of 6 scenarios; the candidate passed 2 of 6. Those totals are disclosed context, not a benchmark. Existing failures remain visible and cannot be averaged away.
 
 ```mermaid
 flowchart LR
@@ -38,23 +38,22 @@ Understudy keeps both results visible. A high judge score never rescues a broken
 
 ## Provenance
 
-Understudy is a clean-room reconstruction informed by a simulation harness used to evaluate a production WhatsApp agent, with earlier thesis work as additional provenance. This public implementation uses a fictional clinic, invented conversations and isolated in-memory storage. It does not include the original deployment, company prompts or production transcripts. The reconstruction itself has not served production.
+I built Understudy as a public reconstruction of a simulation harness I developed for a production WhatsApp agent; that work later became part of my thesis. This implementation uses a fictional clinic, invented conversations and isolated in-memory storage. It does not include the original deployment, company prompts or production transcripts. Understudy itself has not served production.
 
 ## Engineering lessons
 
-- **Test the interaction you actually care about.** Unit tests can cover conversational failures once those cases are known. Persona simulation explores multi-turn combinations absent from the original test cases. Cancellation during a reschedule is a useful example: ending the conversation on cancellation prevents rebooking.
-- **Turn important rules into invariants.** A prompt asking the receptionist to obtain confirmation is not enforcement. The target has an action guard; an independent evaluator checks exposed evidence. The seeded fault disables only that guard so the experiment can establish whether evaluation notices.
-- **A tool attempt is not success.** Record the action result and actual store state. Neither fluent prose nor the presence of a tool call establishes the outcome.
-- **The judge can be wrong.** In the selected fault recording, every quality dimension passed while the booking had already occurred before the requested confirmation. A quality score is evidence about a transcript, not authority over hidden state.
-- **Missing evidence is a limit, not a pass.** State checks require exposed state. Inferred or unavailable state produces `unsupported`; this harness cannot establish facts its target does not expose.
+- **Test the whole interaction.** I included cancellation followed by rebooking because stopping at the successful cancellation would miss the customer's actual goal.
+- **Check effects separately from words.** I made booking return an action result and exposed store snapshot. The evaluator uses both to check confirmation and the resulting appointment.
+- **Show what the judge can see.** I ask it to score conversation quality from the transcript. It cannot inspect hidden actions, so a fluent reply can score well while an independent effect check fails.
+- **Mark missing evidence.** I require exposed state and action logs for checks that depend on them; missing evidence yields `unsupported`.
 
-These are design motivations and reconstruction choices, not claims that every example occurred in production.
+These are engineering choices in this public reconstruction, not claims about particular production incidents.
 
 ## Evidence commitments
 
 No edited model replies or judge scores to manufacture success. Selected recordings are labelled illustrative, never used to claim a pass rate. Target and checks do not share a correctness predicate. Errors and unsupported checks cannot silently pass. Known baseline failures remain visible.
 
-One healthy run and two fault-enabled runs were made. The healthy attempt and second fault attempt are committed. The first fault attempt remains local and was excluded because one judge response was still invalid after its bounded retry, making the run incomplete—not because of its scores. No response or score in the selected pair was edited.
+The examples are complete reruns after the review fixes. Earlier recordings remain in history; a new baseline attempt with judge errors and another baseline superseded by the appointment-ID fix remain local. The previously excluded fault attempt also remains local. No model reply or judge score in the selected pair was edited.
 
 ## Scope
 
@@ -62,14 +61,16 @@ Six scenarios exercise booking, missing information, declined confirmation, unav
 
 This is intentionally a case study, not a general evaluation framework. There is no dashboard, provider ecosystem, replay engine, cost calculator or persistence service.
 
-## Try the evidence path without API keys
+To adapt the harness, implement `TargetAgent.reset()` and `TargetAgent.send(message)`. Each returns an `Observation` with the visible `reply`, an exposed `state` snapshot, and `actions` containing action results. Set `state_source="exposed"` and `actions_exposed=True` only when the adapter actually supplies those channels. Missing channels produce `unsupported` checks.
+
+## Try the stored comparison without API keys
 
 From this checkout, with Python 3.12+ and uv:
 
 ```bash
 uv sync --frozen --extra dev
-uv run pytest -q
 uv run understudy compare examples/baseline.json examples/seeded-bug.json
+uv run pytest -q
 uv run pytest tests/test_cli.py -k seeded_fault -v
 ```
 

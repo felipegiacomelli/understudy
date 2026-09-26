@@ -73,13 +73,15 @@ def test_evaluate_judge_sends_only_public_scenario_and_transcript():
     assert result.scores == {dimension: 3 for dimension in DIMENSIONS}
     assert result.error is None
     assert seen[0][1] is True
-    prompt = json.loads(seen[0][0][1]["content"])
+    serialized = seen[0][0][1]["content"]
+    prompt = json.loads(serialized)
     assert prompt["scenario"]["expected_outcome"] == "appointment booked"
-    assert prompt["transcript"][1] == {
-        "customer": "Tuesday works",
-        "assistant": "Please confirm Tuesday at 10.",
-    }
-    assert all(set(turn) <= {"customer", "assistant"} for turn in prompt["transcript"])
+    assert prompt["transcript"] == [
+        {"speaker": "customer", "text": "Tuesday works"},
+        {"speaker": "assistant", "text": "Please confirm Tuesday at 10."},
+    ]
+    assert serialized.index('"speaker": "customer"') < serialized.index('"speaker": "assistant"')
+    assert "How can I help?" not in serialized
 
 
 def test_evaluate_judge_retries_once_after_duplicate_or_invalid_fields():
@@ -104,27 +106,23 @@ def test_evaluate_judge_retries_once_after_duplicate_or_invalid_fields():
 
 def test_evaluate_judge_rejects_boolean_out_of_range_and_extra_dimensions():
     payloads = [
-        {
-            "scores": {**{key: 3 for key in DIMENSIONS}, "clarity": True},
-            "explanations": {key: "evidence" for key in DIMENSIONS},
-        },
-        {
-            "scores": {**{key: 3 for key in DIMENSIONS}, "clarity": 5, "tone": 3},
-            "explanations": {key: "evidence" for key in DIMENSIONS},
-        },
+        {"scores": {**{key: 3 for key in DIMENSIONS}, "clarity": True},
+         "explanations": {key: "evidence" for key in DIMENSIONS}},
+        {"scores": {**{key: 3 for key in DIMENSIONS}, "clarity": 5},
+         "explanations": {key: "evidence" for key in DIMENSIONS}},
+        {"scores": {**{key: 3 for key in DIMENSIONS}, "tone": 3},
+         "explanations": {key: "evidence" for key in DIMENSIONS}},
     ]
-    calls = 0
+    for payload in payloads:
+        result = evaluate_judge(record(), lambda *args, **kwargs: json.dumps(payload))
+        assert result.scores == {}
+        assert result.error == "Judge returned invalid structured output after 2 attempts."
 
-    def complete(messages, *, json_output):
-        nonlocal calls
-        answer = json.dumps(payloads[min(calls, 1)])
-        calls += 1
-        return answer
 
-    result = evaluate_judge(record(), complete)
-
-    assert calls == 2
-    assert result.scores == {}
+def test_evaluate_judge_rejects_missing_dimension():
+    payload = json.loads(valid_payload())
+    payload["scores"].pop("clarity")
+    result = evaluate_judge(record(), lambda *args, **kwargs: json.dumps(payload))
     assert result.error == "Judge returned invalid structured output after 2 attempts."
 
 
@@ -177,3 +175,13 @@ def test_scenario_status_never_passes_invalid_stored_results():
     source.judge.explanations["clarity"] = "evidence"
     source.checks[0].status = "unknown"
     assert scenario_status(source) == "error"
+
+
+def test_scenario_status_preserves_unsupported_with_valid_judge():
+    source = record()
+    source.checks[0].status = "unsupported"
+    source.judge = JudgeResult(
+        {dimension: 4 for dimension in DIMENSIONS},
+        {dimension: "evidence" for dimension in DIMENSIONS},
+    )
+    assert scenario_status(source) == "unsupported"

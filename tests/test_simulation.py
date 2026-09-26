@@ -187,6 +187,7 @@ def test_cancel_then_rebook_is_not_stopped_at_cancellation():
         "active",
         "booked",
     ]
+    assert record.turns[-1].observation.state["appointments"][0]["appointment_id"] != "APT-1"
 
 
 def test_customer_receives_visible_conversation_only():
@@ -238,13 +239,22 @@ def test_handoff_probe_expects_silence_and_empty_ordinary_reply_fails_check():
     )
 
 
-def test_runner_handles_exact_sentinel_limit_errors_and_fresh_suite_instances():
+def test_runner_handles_customer_end_marker_limit_errors_and_fresh_suite_instances():
     stopped = run_scenario(
         scenario(expected_outcome="active", expected_terminal_states=[]),
         ClinicTarget(Decisions({"reply": "ok"})),
         Customer("<END>"),
     )
     assert stopped.closure_reason == "customer-ended"
+
+    malformed_end = run_scenario(
+        scenario(max_exchanges=2, expected_outcome="active", expected_terminal_states=[]),
+        ClinicTarget(Decisions({"reply": "ok"})),
+        Customer("Thanks <END>"),
+    )
+    assert malformed_end.closure_reason == "customer-ended"
+    assert malformed_end.error is None
+    assert len(malformed_end.turns) == 1
 
     limited = run_scenario(
         scenario(
@@ -313,6 +323,57 @@ def test_missing_or_inferred_state_is_unsupported_and_claims_do_not_prove_succes
         )
     }
     assert {result.id for result in unsupported} == healthy_ids
+
+
+def test_inferred_state_cannot_prove_store_effect_or_forbidden_absence():
+    booked = run_scenario(
+        scenario(), ClinicTarget(booking_decisions()), Customer("CONFIRM")
+    )
+    for observation in [booked.initial_observation, *(turn.observation for turn in booked.turns)]:
+        observation.state_source = "inferred"
+    results = {check.id: check.status for check in evaluate_checks(booked)}
+    assert results["successful-actions"] == "unsupported"
+    assert "exposed" in next(check.explanation for check in evaluate_checks(booked) if check.id == "successful-actions")
+
+    booked.scenario.expected_outcome = "active"
+    results = {check.id: check.status for check in evaluate_checks(booked)}
+    assert results["forbidden-actions"] == "fail"
+
+
+def test_unexposed_actions_cannot_prove_absence_of_booking():
+    record = run_scenario(
+        scenario(expected_outcome="active", expected_terminal_states=[]),
+        ClinicTarget(Decisions({"reply": "No booking"})),
+        Customer("<END>"),
+    )
+    record.turns[0].observation.actions_exposed = False
+    results = {check.id: check.status for check in evaluate_checks(record)}
+    assert results["confirmation-before-booking"] == "unsupported"
+    assert results["required-fields-types"] == "unsupported"
+    assert results["forbidden-actions"] == "unsupported"
+    assert "exposed" in next(check.explanation for check in evaluate_checks(record) if check.id == "forbidden-actions")
+
+    record.turns.clear()
+    record.initial_observation.actions_exposed = False
+    results = {check.id: check.status for check in evaluate_checks(record)}
+    assert results["confirmation-before-booking"] == "unsupported"
+
+
+def test_cancel_rebook_requires_old_appointment_removed_by_successful_cancel():
+    new_booking = {**BOOKING, "slot": "2030-04-15T10:00"}
+    decisions = Decisions(
+        {"reply": "Please confirm Ava Stone / consultation / 2030-04-15T10:00",
+         "action": {"name": "request_confirmation", "arguments": new_booking}},
+        {"reply": "Booked", "action": {"name": "book", "arguments": new_booking}},
+    )
+    record = run_scenario(
+        scenario(id="cancel-rebook", max_exchanges=3),
+        ClinicTarget(decisions, appointments=[{**BOOKING, "appointment_id": "APT-1"}]),
+        Customer("CONFIRM"),
+    )
+    checks = {check.id: check.status for check in evaluate_checks(record)}
+    assert checks["successful-actions"] == "pass"
+    assert checks["prior-appointment-cancelled"] == "fail"
 
 
 def test_state_types_and_transitions_are_checked_independently():

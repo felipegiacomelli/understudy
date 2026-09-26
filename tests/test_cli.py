@@ -44,6 +44,21 @@ def test_invalid_artifacts_produce_readable_error(tmp_path):
     assert "Traceback" not in result.stderr
 
 
+def test_compare_explains_incompatible_evidence(tmp_path):
+    from understudy.records import save_run
+    from test_records import sample_run
+
+    baseline = sample_run()
+    candidate = sample_run()
+    candidate.rubric = {"changed": True}
+    first, second = tmp_path / "baseline.json", tmp_path / "candidate.json"
+    save_run(baseline, first)
+    save_run(candidate, second)
+    result = invoke("compare", first, second)
+    assert result.returncode == 2
+    assert "evaluation signature does not match embedded inputs" in result.stderr
+
+
 def test_existing_output_is_preserved_before_any_provider_call(tmp_path):
     path = tmp_path / "existing.json"
     path.write_text("original evidence")

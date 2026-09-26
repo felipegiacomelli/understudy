@@ -34,6 +34,7 @@ class Observation:
     state_source: Literal["exposed", "inferred", "unavailable"] = "unavailable"
     actions: list[Action] = field(default_factory=list)
     usage: Usage | None = None
+    actions_exposed: bool = False
 
 
 @dataclass
@@ -257,6 +258,8 @@ def _observation(data: dict) -> Observation:
         raise ValueError("invalid observation")
     if data["state_source"] not in {"exposed", "inferred", "unavailable"}:
         raise ValueError("invalid state source")
+    if type(data.get("actions_exposed", False)) is not bool:
+        raise ValueError("invalid action exposure")
     if any(
         type(action.name) is not str
         or not isinstance(action.arguments, dict)
@@ -280,7 +283,8 @@ def _observation(data: dict) -> Observation:
     ):
         raise ValueError("invalid observation usage")
     return Observation(
-        data["reply"], data.get("state"), data["state_source"], actions, usage
+        data["reply"], data.get("state"), data["state_source"], actions, usage,
+        data.get("actions_exposed", False),
     )
 
 

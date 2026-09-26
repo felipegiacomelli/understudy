@@ -206,12 +206,14 @@ def main(argv: list[str] | None = None) -> int:
         ):
             return 2
         return 1 if comparison.has_regression else 0
-    except (ValueError, OSError, TypeError, KeyError):
-        if args.command == "run" and args.output.exists():
+    except (ValueError, OSError, TypeError, KeyError) as exc:
+        if args.command == "compare":
+            message = str(exc) or "Invalid evidence."
+        elif args.output.exists():
             message = "Output already exists; choose a fresh path."
-        elif args.command == "run" and not os.environ.get("OPENAI_API_KEY"):
+        elif not os.environ.get("OPENAI_API_KEY"):
             message = "Missing OPENAI_API_KEY; live runs require both provider keys."
-        elif args.command == "run" and not os.environ.get("DEEPSEEK_API_KEY"):
+        elif not os.environ.get("DEEPSEEK_API_KEY"):
             message = "Missing DEEPSEEK_API_KEY; live runs require both provider keys."
         else:
             message = "Invalid input or incomplete/incompatible evidence; check the files and configuration."
