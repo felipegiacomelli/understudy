@@ -35,6 +35,7 @@ def run_scenario(
     try:
         initial = deepcopy(target.reset())
         message = scenario.opening
+        ending = False
         for exchange in range(scenario.max_exchanges):
             observation = deepcopy(target.send(message))
             turns.append(Turn(message, observation))
@@ -45,6 +46,9 @@ def run_scenario(
                     turns.append(Turn(scenario.post_terminal_probe, probe))
                 closure = "terminal"
                 break
+            if ending:
+                closure = "customer-ended"
+                break
             if exchange + 1 == scenario.max_exchanges:
                 break
             visible = [
@@ -52,9 +56,13 @@ def run_scenario(
                 for turn in turns
             ]
             message = customer.reply(visible)
-            if message.strip().endswith(END_SENTINEL):
-                closure = "customer-ended"
-                break
+            ending = message.strip().endswith(END_SENTINEL)
+            if ending:
+                # Deliver any text before a trailing marker, then end.
+                message = message.strip().removesuffix(END_SENTINEL).strip()
+                if not message:
+                    closure = "customer-ended"
+                    break
     except (
         Exception
     ) as exc:  # retain completed evidence without leaking provider bodies

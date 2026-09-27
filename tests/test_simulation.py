@@ -249,12 +249,21 @@ def test_runner_handles_customer_end_marker_limit_errors_and_fresh_suite_instanc
 
     malformed_end = run_scenario(
         scenario(max_exchanges=2, expected_outcome="active", expected_terminal_states=[]),
-        ClinicTarget(Decisions({"reply": "ok"})),
+        ClinicTarget(Decisions({"reply": "ok"}, {"reply": "Goodbye"})),
         Customer("Thanks <END>"),
     )
     assert malformed_end.closure_reason == "customer-ended"
     assert malformed_end.error is None
-    assert len(malformed_end.turns) == 1
+    assert [turn.customer_message for turn in malformed_end.turns] == [
+        "I need an appointment",
+        "Thanks",
+    ]
+
+    confirmed_end = run_scenario(
+        scenario(), ClinicTarget(booking_decisions()), Customer("CONFIRM\n<END>")
+    )
+    assert confirmed_end.turns[-1].customer_message == "CONFIRM"
+    assert confirmed_end.turns[-1].observation.state["status"] == "booked"
 
     limited = run_scenario(
         scenario(
