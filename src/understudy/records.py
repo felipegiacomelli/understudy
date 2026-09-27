@@ -154,7 +154,12 @@ def load_run(path: str | Path) -> RunRecord:
             scenarios, data["personas"], data["rubric"]
         )
         if data["evaluation_signature"] != expected_signature:
-            raise ValueError("evaluation signature does not match embedded inputs")
+            from .checks import CHECK_REVISION
+
+            raise ValueError(
+                "evaluation signature does not match embedded inputs: the artifact "
+                f"was edited or recorded before check revision {CHECK_REVISION}"
+            )
         return RunRecord(
             data["format_version"],
             data["run_id"],
