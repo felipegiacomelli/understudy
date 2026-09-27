@@ -169,16 +169,16 @@ def test_cancel_then_rebook_is_not_stopped_at_cancellation():
     decisions = Decisions(
         {
             "reply": "Cancelled",
-            "action": {"name": "cancel", "arguments": {"appointment_id": "APT-1"}},
+            "action": {"name": "cancel", "arguments": {"appointment_id": "APT-7"}},
         },
         {"reply": "Booking new slot", "action": {"name": "book", "arguments": BOOKING}},
         {"reply": "Rebooked", "action": {"name": "book", "arguments": BOOKING}},
     )
     target = ClinicTarget(
-        decisions, appointments=[{**BOOKING, "appointment_id": "APT-1"}]
+        decisions, appointments=[{**BOOKING, "appointment_id": "APT-7"}]
     )
     record = run_scenario(
-        scenario(id="rebook", expected_outcome="booked", max_exchanges=5),
+        scenario(id="cancel-rebook", expected_outcome="booked", max_exchanges=5),
         target,
         Customer("new slot", "CONFIRM"),
     )
@@ -187,7 +187,9 @@ def test_cancel_then_rebook_is_not_stopped_at_cancellation():
         "active",
         "booked",
     ]
-    assert record.turns[-1].observation.state["appointments"][0]["appointment_id"] != "APT-1"
+    assert record.turns[-1].observation.state["appointments"][0]["appointment_id"] == "APT-8"
+    checks = {check.id: check.status for check in evaluate_checks(record)}
+    assert checks["prior-appointment-cancelled"] == "pass"
 
 
 def test_customer_receives_visible_conversation_only():

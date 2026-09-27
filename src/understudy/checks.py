@@ -183,27 +183,34 @@ def evaluate_checks(record: ScenarioRecord) -> list[CheckResult]:
     )
 
     if record.scenario.id == "cancel-rebook":
-        cancelled = any(
-            action.name == "cancel"
-            and action.status == "succeeded"
-            and action.arguments.get("appointment_id") == "APT-1"
+        # ponytail: keyed on the scenario id; a signed Scenario field needs a re-recorded run.
+        valid = bool(states) and all(_valid_state(state) for state in states)
+        seeded = (
+            {item["appointment_id"] for item in states[0]["appointments"]}
+            if valid
+            else set()
+        )
+        remaining = (
+            {item["appointment_id"] for item in states[-1]["appointments"]}
+            if valid
+            else set()
+        )
+        cancelled = {
+            action.arguments.get("appointment_id")
             for _, action in actions
-        )
-        old_absent = (
-            bool(states)
-            and all(_valid_state(state) for state in states)
-            and any(item.get("appointment_id") == "APT-1" for item in states[0]["appointments"])
-            and all(item.get("appointment_id") != "APT-1" for item in states[-1]["appointments"])
-        )
+            if action.name == "cancel" and action.status == "succeeded"
+        }
         results.append(
             _result(
                 "prior-appointment-cancelled",
                 (
                     "unsupported"
                     if not exposed or not actions_exposed
-                    else "pass" if cancelled and old_absent else "fail"
+                    else "pass"
+                    if seeded and seeded <= cancelled and not seeded & remaining
+                    else "fail"
                 ),
-                "APT-1 must be cancelled successfully and absent from the final store.",
+                "Seeded appointments must be cancelled successfully and absent from the final store.",
             )
         )
 
