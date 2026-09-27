@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 
 from .checks import evaluate_checks
-from .judge import RUBRIC, scenario_status
+from .judge import PASS_THRESHOLD, RUBRIC, scenario_status
 from .records import RunRecord, ScenarioRecord, evaluation_signature
 
 
@@ -183,7 +183,7 @@ def compare_runs(baseline: RunRecord, candidate: RunRecord) -> Comparison:
                     comparison.score_deltas[(scenario_id, dimension)] = (
                         new_score - old_score
                     )
-                    if old_score >= 3 and new_score < 3:
+                    if old_score >= PASS_THRESHOLD > new_score:
                         comparison.regressions.append(
                             Change("judge", scenario_id, dimension, str(old_score), str(new_score))
                         )
@@ -239,7 +239,11 @@ def render_report(comparison: Comparison) -> str:
             return "unsupported"
         if record.judge.error:
             return "error"
-        low = [f"{name} {score}" for name, score in sorted(record.judge.scores.items()) if score < 3]
+        low = [
+            f"{name} {score}"
+            for name, score in sorted(record.judge.scores.items())
+            if score < PASS_THRESHOLD
+        ]
         return f"fail ({', '.join(low)})" if low else "pass"
 
     lines = [
@@ -248,7 +252,7 @@ def render_report(comparison: Comparison) -> str:
         f"- **Baseline:** {metadata(comparison.baseline)}",
         f"- **Candidate:** {metadata(comparison.candidate)}",
         "",
-        "Uncalibrated pass threshold: every judge dimension must score at least 3.",
+        f"Uncalibrated pass threshold: every judge dimension must score at least {PASS_THRESHOLD}.",
         "",
         "## Scenario results",
         "",
