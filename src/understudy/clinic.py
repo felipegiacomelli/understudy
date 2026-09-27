@@ -75,9 +75,11 @@ class ClinicTarget:
             (
                 int(item["appointment_id"][4:])
                 for item in self.appointments
-                if isinstance(item.get("appointment_id"), str)
+                if isinstance(item, dict)
+                and isinstance(item.get("appointment_id"), str)
                 and item["appointment_id"].startswith("APT-")
-                and item["appointment_id"][4:].isdigit()
+                and item["appointment_id"][4:].isascii()
+                and item["appointment_id"][4:].isdecimal()
             ),
             default=0,
         )
