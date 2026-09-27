@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 
 from .checks import evaluate_checks
-from .judge import PASS_THRESHOLD, RUBRIC, scenario_status
+from .judge import PASS_THRESHOLD, RUBRIC, check_status, scenario_status
 from .records import RunRecord, ScenarioRecord, evaluation_signature
 
 
@@ -225,15 +225,6 @@ def render_report(comparison: Comparison) -> str:
             f"revision {_escape(run.target_revision)}; fault {_escape(run.fault or 'none')}"
         )
 
-    def check_summary(record: ScenarioRecord) -> str:
-        if record.error or any(check.status == "error" for check in record.checks):
-            return "error"
-        if any(check.status == "fail" for check in record.checks):
-            return "fail"
-        if not record.checks or any(check.status == "unsupported" for check in record.checks):
-            return "unsupported"
-        return "pass"
-
     def judge_summary(record: ScenarioRecord) -> str:
         if record.judge is None:
             return "unsupported"
@@ -267,9 +258,9 @@ def render_report(comparison: Comparison) -> str:
     }
     for scenario_id in sorted(baseline_records):
         lines.append(
-            f"| {_escape(scenario_id)} | {check_summary(baseline_records[scenario_id])} | "
+            f"| {_escape(scenario_id)} | {check_status(baseline_records[scenario_id])} | "
             f"{judge_summary(baseline_records[scenario_id])} | "
-            f"{check_summary(candidate_records[scenario_id])} | "
+            f"{check_status(candidate_records[scenario_id])} | "
             f"{judge_summary(candidate_records[scenario_id])} |"
         )
     lines.extend(

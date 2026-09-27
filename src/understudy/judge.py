@@ -127,26 +127,31 @@ def evaluate_judge(
     raise AssertionError("unreachable")
 
 
-def scenario_status(
+def check_status(
     record: ScenarioRecord,
 ) -> Literal["pass", "fail", "error", "unsupported"]:
-    if record.error or (record.judge is not None and record.judge.error):
-        return "error"
-    if any(
-        check.status not in {"pass", "fail", "error", "unsupported"}
-        for check in record.checks
+    if record.error or any(
+        check.status not in {"pass", "fail", "unsupported"} for check in record.checks
     ):
-        return "error"
-    if any(check.status == "error" for check in record.checks):
         return "error"
     if any(check.status == "fail" for check in record.checks):
         return "fail"
-    if (
-        not record.checks
-        or any(check.status == "unsupported" for check in record.checks)
-        or record.judge is None
-        or set(record.judge.scores) != set(RUBRIC)
+    if not record.checks or any(
+        check.status == "unsupported" for check in record.checks
     ):
+        return "unsupported"
+    return "pass"
+
+
+def scenario_status(
+    record: ScenarioRecord,
+) -> Literal["pass", "fail", "error", "unsupported"]:
+    if record.judge is not None and record.judge.error:
+        return "error"
+    status = check_status(record)
+    if status != "pass":
+        return status
+    if record.judge is None or set(record.judge.scores) != set(RUBRIC):
         return "unsupported"
     if (
         set(record.judge.explanations) != set(RUBRIC)
