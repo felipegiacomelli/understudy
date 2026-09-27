@@ -166,7 +166,7 @@ def evaluate_checks(record: ScenarioRecord) -> list[CheckResult]:
     )
     forbidden = not expected_booked and (
         any(action.status == "succeeded" for _, action in books)
-        or (exposed and any(_new_appointments(record, index) for index in range(len(record.turns))))
+        or any(_new_appointments(record, index) for index in range(len(record.turns)))
     )
     results.append(
         _result(
@@ -348,12 +348,16 @@ def _observed_booking(record: ScenarioRecord, turn_index: int, action) -> bool:
 
 
 def _new_appointments(record: ScenarioRecord, turn_index: int) -> list[dict]:
-    before = (
-        record.initial_observation.state
+    """Appointments added in one turn, judged only from exposed snapshots."""
+    prior = (
+        record.initial_observation
         if turn_index == 0
-        else record.turns[turn_index - 1].observation.state
+        else record.turns[turn_index - 1].observation
     )
-    after = record.turns[turn_index].observation.state
+    current = record.turns[turn_index].observation
+    if prior.state_source != "exposed" or current.state_source != "exposed":
+        return []
+    before, after = prior.state, current.state
     if not isinstance(before, dict) or not isinstance(after, dict):
         return []
     old = before.get("appointments")

@@ -351,6 +351,21 @@ def test_inferred_state_cannot_prove_store_effect_or_forbidden_absence():
     assert results["forbidden-actions"] == "fail"
 
 
+def test_exposed_turn_pair_shows_forbidden_booking_despite_unavailable_reset():
+    record = run_scenario(
+        scenario(expected_outcome="active", expected_terminal_states=[], max_exchanges=2),
+        ClinicTarget(Decisions({"reply": "ok"}, {"reply": "ok"})),
+        Customer("still here"),
+    )
+    record.initial_observation.state_source = "unavailable"
+    record.turns[1].observation.state["appointments"].append(
+        {**BOOKING, "appointment_id": "APT-9"}
+    )
+    results = {check.id: check.status for check in evaluate_checks(record)}
+    assert results["state-evidence"] == "unsupported"
+    assert results["forbidden-actions"] == "fail"
+
+
 def test_unexposed_actions_cannot_prove_absence_of_booking():
     record = run_scenario(
         scenario(expected_outcome="active", expected_terminal_states=[]),
