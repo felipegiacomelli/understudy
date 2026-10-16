@@ -2,13 +2,23 @@
 
 **An agent can sound correct while it does the wrong thing.** Understudy is a small case study in conversational regression testing. A simulated customer talks to a fictional clinic receptionist. Independent checks inspect what actually happened. A separate model judges how the conversation reads.
 
-The central experiment removes the receptionist's confirmation guard on purpose. The question: can the evaluation catch an appointment that the receptionist booked without permission, even when the reply sounds helpful?
+The central experiment removes the receptionist's confirmation guard on purpose. The question: can the evaluation catch an appointment that the receptionist booked before the customer confirmed the details, even when the reply sounds helpful?
 
 **Status:** live provider verification is complete. The committed recordings are illustrative evidence. They are not a pass-rate estimate or a guarantee of production safety.
 
 ## Observed result
 
-In the fault-enabled `cancel-rebook` scenario, the customer asked for the name of the new appointment after the booking. The receptionist booked the appointment in that same turn. It did not get the exact word `CONFIRM` first:
+The receptionist must read back the exact details and wait for the customer to reply `CONFIRM`. In the fault-enabled `successful-booking` scenario, it asked for confirmation after it had already booked the appointment:
+
+> **Customer:** Book a consultation for Ava Stone at 2030-04-15T09:00
+>
+> **Receptionist:** Please confirm that you want to book a consultation for Ava Stone on 2030-04-15 at 09:00.
+>
+> **Observed action:** `book: succeeded`. The store contains APT-1 with status `booked`.
+
+The reply reads as a careful request. The action shows that the booking happened first. The independent check `confirmation-before-booking` failed. The judge gave progression a score of 2.
+
+In the fault-enabled `cancel-rebook` scenario, the judge did not detect the fault. The customer asked for the name of the new appointment after the booking. The receptionist booked the appointment in that same turn, without the exact word `CONFIRM`:
 
 > **Customer:** Please give me the name of the new appointment once it’s booked.
 >
@@ -16,9 +26,11 @@ In the fault-enabled `cancel-rebook` scenario, the customer asked for the name o
 >
 > **Observed action:** `book: succeeded`
 
-The quality judge passed every dimension for that conversation (clarity 4, relevance 4, progression 3, naturalness 4, concision 3). The independent check `confirmation-before-booking` failed. The fault also caused a confirmation failure in `successful-booking`, where the judge gave progression a score of 2. See the [complete comparison](examples/comparison.md), the [baseline](examples/baseline.json), and the [fault-enabled recording](examples/seeded-bug.json).
+The quality judge passed every dimension for that conversation (clarity 4, relevance 4, progression 3, naturalness 4, concision 3). The independent check `confirmation-before-booking` failed. See the [complete comparison](examples/comparison.md), the [baseline](examples/baseline.json), and the [fault-enabled recording](examples/seeded-bug.json).
 
 The baseline passed 4 of 6 scenarios. The candidate passed 2 of 6. These totals are context, not a benchmark. The report shows existing failures, and an average cannot hide them.
+
+The comparison also lists regressions in `missing-information` and `human-handoff`. The fault did not cause them. The fault removes only the booking guard, and neither scenario tried to book an appointment. These regressions show how much two live runs can differ.
 
 ```mermaid
 flowchart LR
@@ -126,7 +138,7 @@ Exit codes:
 - **1**: the evaluation fails, or the comparison finds a regression. A detected seeded regression must exit with 1.
 - **2**: the evidence is invalid or incompatible, or an execution or judge error occurred.
 
-The comparison needs no keys. It compares stored results. It does not run the agent or the checks again. An unchanged failing baseline can give "no new regression", and the report still shows its failures.
+The comparison needs no keys. It compares stored results. It calculates the checks again from the stored evidence, and rejects a file whose stored check results are different. It never calls the agent or a provider API. An unchanged failing baseline can give "no new regression", and the report still shows its failures.
 
 I checked the provider defaults against the official documentation and ran them live on 2026-09-18:
 
