@@ -32,6 +32,7 @@ def run_scenario(
     turns: list[Turn] = []
     error = None
     closure = "exchange-limit"
+    initial = Observation("", None, "unavailable")
     try:
         initial = deepcopy(target.reset())
         message = scenario.opening
@@ -67,8 +68,6 @@ def run_scenario(
         Exception
     ) as exc:  # retain completed evidence without leaking provider bodies
         closure, error = "error", type(exc).__name__
-        if "initial" not in locals():
-            initial = Observation("", None, "unavailable")
     return ScenarioRecord(scenario, initial, turns, closure, error)
 
 
