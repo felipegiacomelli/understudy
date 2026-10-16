@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools==84.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "understudy"
+version = "0.1.0"
+description = "A fictional-clinic case study in pre-deployment conversational regression testing"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = ["openai==2.28.0"]
+
+[project.scripts]
+understudy = "understudy.__main__:main"
+
+[project.optional-dependencies]
+dev = ["pytest==9.0.2"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
