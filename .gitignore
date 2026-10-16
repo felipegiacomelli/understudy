@@ -8,3 +8,4 @@ dist/
 .env
 .env.*
 runs/
+!.env.example

@@ -104,11 +104,10 @@ Follow the implementation: [target and store](src/understudy/clinic.py) → [ind
 
 ## Run a live experiment
 
-Live runs cost money at the providers. Put the provider keys in the `.env` file, which Git ignores:
+Live runs cost money at the providers. Copy the template to `.env`, which Git ignores. Then write your OpenAI and DeepSeek keys in it:
 
-```dotenv
-OPENAI_API_KEY=your-openai-key
-DEEPSEEK_API_KEY=your-deepseek-key
+```bash
+cp .env.example .env
 ```
 
 Give that file to uv explicitly, and use new output paths:

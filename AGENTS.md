@@ -19,7 +19,7 @@ uv run understudy compare examples/baseline.json examples/seeded-bug.json
 
 This command exits with code 1, because the comparison contains regressions. Exit code 1 is the expected result.
 
-Do not start a live run (`understudy run`) unless the user tells you to. A live run calls paid APIs. It needs `OPENAI_API_KEY` and `DEEPSEEK_API_KEY` in `.env`, and you must start it with `uv run --env-file .env`.
+Do not start a live run (`understudy run`) unless the user tells you to. A live run calls paid APIs. It needs `OPENAI_API_KEY` and `DEEPSEEK_API_KEY` in `.env` (copy `.env.example`), and you must start it with `uv run --env-file .env`.
 
 ## Code map
 
