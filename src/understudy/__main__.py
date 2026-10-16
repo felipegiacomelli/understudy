@@ -77,7 +77,7 @@ def run_live(output: Path, fault: str | None) -> int:
             raise ValueError(f"Missing {name}; live runs require both provider keys.")
 
     from .checks import evaluate_checks
-    from .clinic import ClinicTarget, SCENARIOS
+    from .clinic import ClinicTarget, SCENARIOS, TARGET_REVISION
     from .judge import EVALUATION_POLICY, evaluate_judge
     from .llm import Completer, SIMULATION_MODEL, TARGET_MODEL
     from .report import scenario_status
@@ -139,7 +139,7 @@ def run_live(output: Path, fault: str | None) -> int:
                 for key, value in PERSONAS.items()
             },
             rubric=EVALUATION_POLICY,
-            target_revision="clinic-v1",
+            target_revision=TARGET_REVISION,
             fault=fault,
         )
         for record in run.records:

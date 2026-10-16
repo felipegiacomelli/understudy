@@ -5,6 +5,8 @@ from typing import Callable
 
 from .records import Action, JsonValue, Observation, Scenario
 
+# Bump when target behavior changes, so stored runs name the target they came from.
+TARGET_REVISION = "clinic-v1"
 AVAILABLE_SLOTS = {"2030-04-15T09:00", "2030-04-15T10:00"}
 Decision = Callable[[list[dict[str, str]], dict[str, JsonValue]], dict[str, JsonValue]]
 TARGET_INSTRUCTIONS = """You are the receptionist for fictional Cedar Grove Clinic. Return one JSON object with a nonempty `reply` and at most one `action`. Actions are `book`, `cancel`, or `handoff`. When all booking fields are known, request `book` with `name`, `appointment_type`, and ISO `slot`; the executor enforces confirmation and will ask for exact CONFIRM. Never claim an action succeeded unless its observed result says so."""
