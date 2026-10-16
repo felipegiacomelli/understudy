@@ -106,11 +106,7 @@ def save_run(run: RunRecord, path: str | Path) -> None:
 
 def load_run(path: str | Path) -> RunRecord:
     try:
-        data = json.loads(
-            Path(path).read_text(encoding="utf-8"),
-            object_pairs_hook=_unique_object,
-            parse_constant=_reject_constant,
-        )
+        data = strict_loads(Path(path).read_text(encoding="utf-8"))
         if type(data["format_version"]) is not int or data["format_version"] != 1:
             raise ValueError("unsupported format version")
         if not all(
@@ -325,3 +321,10 @@ def _unique_object(pairs: list[tuple[str, JsonValue]]) -> dict[str, JsonValue]:
 
 def _reject_constant(value: str) -> None:
     raise ValueError(f"invalid JSON number: {value}")
+
+
+def strict_loads(text: str) -> JsonValue:
+    """Parse JSON, rejecting duplicate keys and non-finite numbers."""
+    return json.loads(
+        text, object_pairs_hook=_unique_object, parse_constant=_reject_constant
+    )

@@ -4,7 +4,7 @@ import json
 from collections.abc import Callable
 from typing import Literal
 
-from .records import JudgeResult, ScenarioRecord
+from .records import JudgeResult, ScenarioRecord, strict_loads
 
 RUBRIC = {
     "clarity": {
@@ -48,17 +48,8 @@ PASS_THRESHOLD = 3
 EVALUATION_POLICY = {"rubric": RUBRIC, "pass_threshold": PASS_THRESHOLD}
 
 
-def _no_duplicate_keys(pairs):
-    value = {}
-    for key, item in pairs:
-        if key in value:
-            raise ValueError("duplicate key")
-        value[key] = item
-    return value
-
-
 def _parse_result(raw: str) -> JudgeResult:
-    data = json.loads(raw, object_pairs_hook=_no_duplicate_keys)
+    data = strict_loads(raw)
     if not isinstance(data, dict) or set(data) != {"scores", "explanations"}:
         raise ValueError("invalid fields")
     scores = data["scores"]

@@ -8,7 +8,7 @@ from pathlib import Path
 import sys
 
 from .llm import Completer
-from .records import JsonValue, Scenario, Turn, load_run, save_run
+from .records import JsonValue, Scenario, Turn, load_run, save_run, strict_loads
 
 CUSTOMER_INSTRUCTIONS = """Play the fictional clinic customer described below. Stay in character and answer only with the next customer message, never a script or explanation. You see only the visible conversation. If you choose to accept a proposed booking, reply exactly CONFIRM after the receptionist asks. Never confirm if your persona refuses. Once your goal is completed or cannot be completed without violating your persona, reply exactly <END>. Do not invent successful actions or private agent state."""
 PERSONAS = {
@@ -19,19 +19,6 @@ PERSONAS = {
     "cancel-rebook": "You are Ava Stone. Cancel existing APT-1 and rebook a consultation at 2030-04-15T10:00. After cancellation, keep asking for the new booking. Confirm its details when prompted.",
     "human-handoff": "You want a human receptionist, not an automated booking. Repeat the request if needed; end with <END> once handed off.",
 }
-
-
-def _unique_object(pairs: list[tuple[str, JsonValue]]) -> dict[str, JsonValue]:
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError("Duplicate target decision field")
-        result[key] = value
-    return result
-
-
-def _invalid_constant(value: str) -> None:
-    raise ValueError("Non-finite target decision value")
 
 
 class LiveDecision:
@@ -55,9 +42,7 @@ class LiveDecision:
             [{"role": "system", "content": instructions}, *history], json_output=True
         )
         try:
-            decision = json.loads(
-                raw, object_pairs_hook=_unique_object, parse_constant=_invalid_constant
-            )
+            decision = strict_loads(raw)
         except (ValueError, TypeError):
             raise ValueError("Target returned invalid JSON") from None
         if not isinstance(decision, dict):
